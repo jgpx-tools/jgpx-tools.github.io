@@ -254,23 +254,20 @@
         .custom-marker { width: 24px; height: 24px; background: var(--text-main); border: 2px solid #fff; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: 0.2s;}
         .custom-marker.selected { background: var(--brand-harvest); box-shadow: 0 0 0 2px var(--brand-harvest); z-index: 1000 !important;}
 
-        /* === 響應式佈局 (RWD) 深度最佳化 === */
+        /* === 響應式佈局 (RWD) === */
         @media (max-width: 768px) {
             body { padding: 16px 12px; }
             .main-wrapper { padding: 20px; border-radius: 12px; }
             .container { flex-direction: column; gap: 24px; }
             .panel, .maps-container { min-width: 0; width: 100%; flex-basis: 100%; }
             .dash-grid { grid-template-columns: 1fr; }
-            
             .header-container { flex-direction: column; align-items: stretch; gap: 16px; padding-bottom: 20px; margin-bottom: 20px;}
             .app-header { gap: 8px; justify-content: space-between; }
             .app-tab-btn { flex: 1; justify-content: center; padding: 10px 0; }
             .help-btn { justify-content: center; width: 100%; }
-
             .viewer-toolbar { flex-direction: column; align-items: stretch; gap: 12px; }
             .toolbar-group { flex-wrap: wrap; justify-content: flex-start; }
             .tool-btn { flex: 1; justify-content: center; min-width: 80px; padding: 8px 12px;}
-            
             .map-frame { min-height: 350px; }
         }
         
@@ -541,7 +538,7 @@
                             <div class="radio-group" style="flex-direction: column; align-items: flex-start;">
                                 <label class="radio-label"><input type="radio" name="harvestStrategy" value="pure" onchange="toggleHarvestOptions()"> 原座標連線</label>
                                 <label class="radio-label"><input type="radio" name="harvestStrategy" value="jump_exact" onchange="toggleHarvestOptions()"> 原點跳躍收果</label>
-                                <label class="radio-label"><input type="radio" name="harvestStrategy" value="jump_offset" checked onchange="toggleHarvestOptions()"> 圓弧跳躍收果</label>
+                                <label class="radio-label"><input type="radio" name="harvestStrategy" value="jump_offset" checked onchange="toggleHarvestOptions()"> 圓弧跳躍收果 (自動迴避 40m)</label>
                             </div>
                             
                             <div id="harvestOffsetConfig" style="margin-top: 16px;">
@@ -641,7 +638,7 @@
             <div class="maps-container">
                 <div class="map-box">
                     <div class="map-header">
-                        <div class="map-title"><i data-lucide="map"></i> 種花路徑 <span class="hint-text">(紅:繞圈 橘:步行 紫:跳躍 藍:緩衝 灰:40m範圍)</span></div>
+                        <div class="map-title"><i data-lucide="map"></i> 種花路徑 <span class="hint-text">(實線:完整軌跡 | 數字:實際執行順序)</span></div>
                         <div class="map-controls">
                             <div id="layerToggles" class="toggle-group" style="display: none;">
                                 <label class="toggle-wrapper" style="margin-bottom: 0;">
@@ -674,7 +671,7 @@
 
                 <div class="map-box">
                     <div class="map-header">
-                        <div class="map-title"><i data-lucide="map"></i> 收果路徑 <span class="hint-text" id="harvestMapHint">(紅:目標 橘:步行 紫:緩衝 灰:40m範圍)</span></div>
+                        <div class="map-title"><i data-lucide="map"></i> 收果路徑 <span class="hint-text" id="harvestMapHint">(實線:完整軌跡 | 紅點:收果點)</span></div>
                     </div>
                     <div id="mapHarvest" class="map-frame">
                         <div id="emptyStateHarvest" class="empty-state">
@@ -838,9 +835,9 @@
 
             if(hint) {
                 if (strat === 'pure') {
-                    hint.innerText = "(直線連線, 無跳躍與緩衝, 灰:40m範圍)";
+                    hint.innerText = "(實線:完整軌跡 | 原座標直線連線)";
                 } else {
-                    hint.innerText = "(紅:目標 橘:步行 紫:緩衝 灰:40m範圍)";
+                    hint.innerText = "(實線:完整軌跡 | 紅點:收果目標點)";
                 }
             }
         }
@@ -1139,14 +1136,17 @@
             });
         }
 
-        function buildRouteFromCenters(centers, options) {
-            let sortedCenters = options.sortMode === 'auto' ? sortShortestPath([...centers]) : [...centers];
+        // ⭐ 演算法回歸：叢集分組 + 8字連貫完美保留
+        function buildRouteFromCenters(sortedCenters, options) {
             let rawCoords = [];
+            // 用來記錄最後真正執行的順序 (這會傳給外層標示 P1, P2)
+            let actualExecutionCenters = []; 
 
             const runPass = (ratio, passNum) => {
                 let clusters = [];
                 let visited = new Set();
                 
+                // 1. 叢集分組：把距離小於 radius*2.1 的點抓成一團
                 for (let i = 0; i < sortedCenters.length; i++) {
                     if (visited.has(i)) continue;
                     let cluster = [sortedCenters[i]];
@@ -1167,12 +1167,15 @@
                     clusters.push(cluster);
                 }
 
+                // 2. 針對每個叢集，產生 8 字連貫路線
                 clusters.forEach((cluster) => {
-                    let sortedCluster = cluster;
-
-                    sortedCluster.forEach((center, idx) => {
+                    cluster.forEach((center, idx) => {
                         let startAngleOffset = 0;
                         let direction = (idx % 2 === 0) ? 1 : -1;
+                        
+                        if (passNum === 1) {
+                            actualExecutionCenters.push(center);
+                        }
                         
                         if (options.smartChain && rawCoords.length > 0 && idx > 0) {
                             let lastP = rawCoords[rawCoords.length - 1];
@@ -1191,7 +1194,10 @@
                             isClusterContinuation: (idx > 0)
                         }));
 
-                        if (rawCoords.length > 0 && idx === 0) {
+                        // 只有叢集的第一個點才需要強制跳躍 (切換叢集時)
+                        if (rawCoords.length > 0 && idx === 0 && passNum === 1) {
+                            currentClusterPoints[0].forceJump = true;
+                        } else if (rawCoords.length > 0 && idx === 0 && passNum === 2) {
                             currentClusterPoints[0].forceJump = true;
                         }
 
@@ -1219,7 +1225,7 @@
                 runPass(options.loop2Ratio, 2);
             }
 
-            return rawCoords;
+            return { rawCoords, actualExecutionCenters };
         }
 
         async function processAll() {
@@ -1279,10 +1285,13 @@
             // ==========================================
             // 🌸 生成種花路徑 (Plant)
             // ==========================================
-            let rawPlantCoords = buildRouteFromCenters(sortedCenters, {
+            let buildResult = buildRouteFromCenters(sortedCenters, {
                 radius, pointsCount, loopMode, loop1Ratio, loop2Ratio, crossCenter, interleave, smartChain,
-                mergeOverlaps: true, sortMode: 'original', loopBuffer, enableLoopBuffer
+                loopBuffer, enableLoopBuffer, sortMode
             });
+            let rawPlantCoords = buildResult.rawCoords;
+            // 這是經過叢集分組後，實際真正執行的點位順序
+            let actualExecutionCenters = buildResult.actualExecutionCenters;
 
             let returnPass = loopMode === 'twice' ? 2 : 1;
             if (endMode === 'first') {
@@ -1328,20 +1337,19 @@
 
 
             // ==========================================
-            // 🍎 生成收果路徑 (Harvest) - 加入圓弧與全域防禦
+            // 🍎 生成收果路徑 (Harvest) - 使用實際執行的順序 (actualExecutionCenters)
             // ==========================================
             let harvestCenters = [];
             const R = 6371000;
 
             if (harvestStrat === 'jump_offset') {
-                harvestCenters = sortedCenters.map((c, index) => {
+                harvestCenters = actualExecutionCenters.map((c, index) => {
                     let safePoint = null;
                     let currentMaxOffset = hOffsetMax;
                     let attempts = 0;
                     let finalAngle = 0;
                     let finalDist = 0;
 
-                    // ⭐ 全域安全防禦迴圈
                     while (!safePoint && attempts < 200) {
                         const angle = Math.random() * 360 * (Math.PI / 180); 
                         const dist = hOffsetMin + Math.random() * (currentMaxOffset - hOffsetMin);
@@ -1353,8 +1361,8 @@
                         const testLon = c.lon + (dLon * 180 / Math.PI);
 
                         let isSafe = true;
-                        for (let i = 0; i < sortedCenters.length; i++) {
-                            let d = getDistance(testLat, testLon, sortedCenters[i].lat, sortedCenters[i].lon);
+                        for (let i = 0; i < actualExecutionCenters.length; i++) {
+                            let d = getDistance(testLat, testLon, actualExecutionCenters[i].lat, actualExecutionCenters[i].lon);
                             if (d <= 41) {
                                 isSafe = false;
                                 break;
@@ -1383,7 +1391,7 @@
                     return { ...safePoint, originalCenter: c, startAngle: finalAngle, radius: finalDist };
                 });
             } else {
-                harvestCenters = sortedCenters.map(c => ({...c, originalCenter: c}));
+                harvestCenters = actualExecutionCenters.map(c => ({...c, originalCenter: c}));
             }
 
             let finalHarvestCoords = [];
@@ -1431,8 +1439,8 @@
                             let testLon = c.lon + (dLon * 180 / Math.PI);
 
                             let isSafe = true;
-                            for (let k = 0; k < sortedCenters.length; k++) {
-                                if (getDistance(testLat, testLon, sortedCenters[k].lat, sortedCenters[k].lon) <= 41) {
+                            for (let k = 0; k < actualExecutionCenters.length; k++) {
+                                if (getDistance(testLat, testLon, actualExecutionCenters[k].lat, actualExecutionCenters[k].lon) <= 41) {
                                     isSafe = false;
                                     break;
                                 }
@@ -1466,6 +1474,7 @@
             // 💾 狀態更新與 UI 渲染
             // ==========================================
             genState = {
+                actualExecutionCenters, // ⭐ 傳遞真實排序以供地圖標籤使用
                 originalCenters,
                 finalPlantCoords,
                 jumpSegments: plantJumpSegments,
@@ -1485,7 +1494,6 @@
 
             const plantDistKm = (calcPathDistance(finalPlantCoords, jumpThreshold) / 1000).toFixed(2);
             
-            // ⭐ 演算法修正：1點 = 1秒
             const plantTimeMin = Math.floor(finalPlantCoords.length / 60);
             const plantTimeSec = finalPlantCoords.length % 60;
             
@@ -1524,16 +1532,20 @@
             });
 
             globalPlantCoords = filteredPlantCoords; 
-            drawGeneratorMaps(genState.originalCenters, filteredPlantCoords, filteredJumpSegments, genState.finalHarvestCoords, genState.harvestJumpSegments, genState.harvestCenters);
+            drawGeneratorMaps(genState.actualExecutionCenters, filteredPlantCoords, filteredJumpSegments, genState.finalHarvestCoords, genState.harvestJumpSegments, genState.harvestCenters);
         }
 
-        function drawGeneratorMaps(originalCenters, finalPlantCoords, plantJumpSegments, finalHarvestCoords, harvestJumpSegments, harvestCenters) {
+        function drawGeneratorMaps(actualExecutionCenters, finalPlantCoords, plantJumpSegments, finalHarvestCoords, harvestJumpSegments, harvestCenters) {
             layersPlant.forEach(layer => mapPlant.removeLayer(layer));
             layersPlant = [];
             layersHarvest.forEach(layer => mapHarvest.removeLayer(layer));
             layersHarvest = [];
 
-            // --- 繪製種花地圖 ---
+            let plantPathLatLngs = finalPlantCoords.map(c => [c.lat, c.lon]);
+            if (plantPathLatLngs.length > 1) {
+                layersPlant.push(L.polyline(plantPathLatLngs, {color: '#94a3b8', weight: 1.5, opacity: 0.6}).addTo(mapPlant));
+            }
+
             plantJumpSegments.forEach(seg => {
                 layersPlant.push(L.polyline([[seg[0].lat, seg[0].lon], [seg[1].lat, seg[1].lon]], {color: '#cbd5e1', weight: 2, dashArray: '4, 6', opacity: 0.8}).addTo(mapPlant));
             });
@@ -1546,22 +1558,28 @@
                 layersPlant.push(L.circleMarker([c.lat, c.lon], {radius: ptRadius, color: ptColor, fillOpacity: opacity, weight: 1}).addTo(mapPlant));
             });
 
-            originalCenters.forEach((c, index) => {
+            // ⭐ 修正：使用 actualExecutionCenters (實際叢集執行順序) 來繪製 P1, P2 標籤
+            actualExecutionCenters.forEach((c, index) => {
                 layersPlant.push(L.circle([c.lat, c.lon], {
                     radius: 40, color: '#64748b', weight: 1.5, dashArray: '5, 5', fillColor: '#94a3b8', fillOpacity: 0.15, interactive: false
                 }).addTo(mapPlant));
 
                 const marker = L.circleMarker([c.lat, c.lon], {radius: 6, color: '#0f172a', fillColor: 'white', fillOpacity: 0.9, weight: 2}).addTo(mapPlant);
                 marker.bindTooltip((index + 1).toString(), {permanent: true, direction: 'center', className: 'node-label'});
-                marker.bindPopup(`<div style="font-weight:600; color:var(--text-main); margin-bottom:4px; font-size:14px;">原始中心 P${index + 1}</div><div style="font-family:ui-monospace, monospace; color:var(--text-muted); font-size:12px;">${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}</div>`);
+                marker.bindPopup(`<div style="font-weight:600; color:var(--text-main); margin-bottom:4px; font-size:14px;">執行順序 P${index + 1}</div><div style="font-family:ui-monospace, monospace; color:var(--text-muted); font-size:12px;">${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}</div>`);
                 layersPlant.push(marker);
             });
 
-            if (originalCenters.length > 0) {
-                mapPlant.fitBounds(L.latLngBounds(originalCenters.map(c => [c.lat, c.lon])), {padding: [30, 30]});
+            if (actualExecutionCenters.length > 0) {
+                mapPlant.fitBounds(L.latLngBounds(actualExecutionCenters.map(c => [c.lat, c.lon])), {padding: [30, 30]});
             }
 
             // --- 繪製收果地圖 ---
+            let harvestPathLatLngs = finalHarvestCoords.map(c => [c.lat, c.lon]);
+            if (harvestPathLatLngs.length > 1) {
+                layersHarvest.push(L.polyline(harvestPathLatLngs, {color: '#94a3b8', weight: 1.5, opacity: 0.6}).addTo(mapHarvest));
+            }
+
             harvestJumpSegments.forEach(seg => {
                 layersHarvest.push(L.polyline([[seg[0].lat, seg[0].lon], [seg[1].lat, seg[1].lon]], {color: '#cbd5e1', weight: 2, dashArray: '4, 6', opacity: 0.8}).addTo(mapHarvest));
             });
@@ -1577,11 +1595,11 @@
             harvestCenters.forEach((c, index) => {
                 const marker = L.circleMarker([c.lat, c.lon], {radius: 6, color: '#ef4444', fillColor: '#fef2f2', fillOpacity: 0.9, weight: 2}).addTo(mapHarvest);
                 marker.bindTooltip((index + 1).toString(), {permanent: true, direction: 'center', className: 'node-label', style: {color: '#991b1b'}});
-                marker.bindPopup(`<div style="font-weight:600; color:#991b1b; margin-bottom:4px; font-size:14px;">收果目標 P${index + 1}</div><div style="font-family:ui-monospace, monospace; color:var(--text-muted); font-size:12px;">${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}</div>`);
+                marker.bindPopup(`<div style="font-weight:600; color:#991b1b; margin-bottom:4px; font-size:14px;">收果順序 P${index + 1}</div><div style="font-family:ui-monospace, monospace; color:var(--text-muted); font-size:12px;">${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}</div>`);
                 layersHarvest.push(marker);
             });
             
-            originalCenters.forEach((c, index) => {
+            actualExecutionCenters.forEach((c, index) => {
                 layersHarvest.push(L.circle([c.lat, c.lon], {
                     radius: 40, color: '#64748b', weight: 1.5, dashArray: '5, 5', fillColor: '#94a3b8', fillOpacity: 0.15, interactive: false
                 }).addTo(mapHarvest));
@@ -1613,9 +1631,10 @@
 
         function previewCoordinates() {
             const inputText = document.getElementById('viewerInput').value;
-            originalViewerCoords = extractCoordinates(inputText);
-            if (originalViewerCoords.length === 0) return alert('找不到有效的座標！');
+            let extracted = extractCoordinates(inputText);
+            if (extracted.length === 0) return alert('找不到有效的座標！');
             
+            originalViewerCoords = extracted;
             hideEmptyState('view');
             
             currentViewerCoords = [...originalViewerCoords]; 
