@@ -6,8 +6,6 @@ A minimalist, automated GPX route generator designed for precision geometric rou
 
 **Experience the tool here:** [https://jgpx-tools.github.io](https://jgpx-tools.github.io)
 
-*(Note: Replace the URL above with your actual organization page link)*
-
 ## Features
 
 - **Smart Pathfinding**: Automatically sorts inputted coordinates to generate the shortest possible route.
