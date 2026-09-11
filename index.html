@@ -1,0 +1,1820 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JumpJump GPX Flow</title>
+    <!-- Leaflet 地圖 -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Lucide 圖示庫 -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        /* === 極簡風格核心變數 === */
+        :root {
+            --bg-color: #ffffff;
+            --bg-muted: #f9fafb;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --accent: #0f172a;
+            --accent-hover: #334155;
+            --brand-plant: #10b981;
+            --brand-harvest: #ef4444;
+            --brand-jump: #8b5cf6;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+            padding: 40px 20px; 
+            max-width: 1280px; 
+            margin: auto; 
+            background-color: var(--bg-muted); 
+            color: var(--text-main); 
+            line-height: 1.6;
+        }
+        
+        .main-wrapper {
+            background: var(--bg-color);
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            padding: 40px;
+            border: 1px solid var(--border-color);
+            box-sizing: border-box;
+            width: 100%;
+        }
+
+        h2 { display: flex; align-items: center; gap: 10px; color: var(--text-main); margin-top: 0; margin-bottom: 4px; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;}
+        p.subtitle { color: var(--text-muted); font-size: 14px; margin-top: 0; margin-bottom: 0px; font-weight: 400;}
+        
+        /* === 集中管理全域 SVG 圖示大小與對齊 === */
+        .header-left h2 svg { width: 28px; height: 28px; flex-shrink: 0; }
+        .help-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .app-tab-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .section-title svg { width: 18px; height: 18px; flex-shrink: 0; }
+        details.master-group > summary svg { width: 18px; height: 18px; flex-shrink: 0; }
+        .sub-label svg { width: 14px; height: 14px; flex-shrink: 0; margin-right: 4px; vertical-align: text-bottom; }
+        .btn-primary svg { width: 18px; height: 18px; flex-shrink: 0; }
+        .btn-secondary svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .tool-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+        .output-header svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .dash-label svg { width: 14px; height: 14px; flex-shrink: 0; }
+        .dash-time-title svg { width: 14px; height: 14px; flex-shrink: 0; }
+        .dash-time-icon svg { width: 28px; height: 28px; flex-shrink: 0; }
+        .map-title svg { width: 18px; height: 18px; flex-shrink: 0; }
+        .empty-state svg { width: 32px; height: 32px; flex-shrink: 0; margin-bottom: 8px; opacity: 0.7; color: var(--text-muted); }
+        .drag-handle svg { width: 14px; height: 14px; flex-shrink: 0; }
+        
+        /* === 頭部與選單 === */
+        .header-container { 
+            display: flex; justify-content: space-between; align-items: flex-start; 
+            margin-bottom: 30px; padding-bottom: 30px; border-bottom: 1px solid var(--border-color); 
+            flex-wrap: wrap; gap: 20px;
+        }
+        
+        .header-left { display: flex; flex-direction: column; }
+        
+        .app-header { display: flex; gap: 32px; flex-wrap: wrap; margin-top: 10px; width: 100%;}
+        .app-tab-btn { 
+            background: transparent; border: none; font-size: 14px; font-weight: 500; 
+            color: var(--text-muted); padding: 8px 0; cursor: pointer; transition: 0.2s; 
+            position: relative; display: flex; align-items: center; gap: 6px;
+        }
+        .app-tab-btn:hover { color: var(--text-main); }
+        .app-tab-btn.active { color: var(--text-main); font-weight: 600; }
+        .app-tab-btn.active::after { 
+            content: ''; position: absolute; bottom: -2px; left: 0; right: 0; 
+            height: 2px; background: var(--text-main); border-radius: 2px;
+        }
+
+        .app-content { display: none; }
+        .app-content.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+        .help-btn { 
+            background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; 
+            padding: 8px 16px; cursor: pointer; color: var(--text-muted); font-size: 13px; font-weight: 500;
+            transition: 0.2s; display: flex; align-items: center; gap: 6px; white-space: nowrap;
+        }
+        .help-btn:hover { background: var(--bg-muted); color: var(--text-main); border-color: #cbd5e1;}
+
+        /* === 共通版面設計 === */
+        .container { display: flex; gap: 40px; flex-wrap: wrap; }
+        .panel { flex: 1; min-width: 380px; display: flex; flex-direction: column; gap: 20px;}
+        
+        textarea, input[type="text"], input[type="number"], select { 
+            background-color: var(--bg-color); color: var(--text-main); 
+            border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; 
+            box-sizing: border-box; font-size: 14px; transition: 0.2s; font-family: inherit; width: 100%;
+        }
+        textarea:focus, input:focus, select:focus { outline: none; border-color: var(--text-muted); box-shadow: 0 0 0 1px var(--text-muted); }
+        textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; resize: vertical; margin-bottom: 0; min-height: 100px;}
+        
+        /* 收合與區塊標題設計 */
+        .section-title { font-size: 15px; font-weight: 600; color: var(--text-main); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        
+        details.master-group { 
+            background: var(--bg-color); 
+            border: 1px solid var(--border-color); 
+            border-radius: 10px; 
+            overflow: hidden; 
+            transition: 0.2s;
+        }
+        details.master-group > summary { 
+            padding: 14px 18px; 
+            background: var(--bg-muted); 
+            color: var(--text-main); 
+            font-weight: 600; 
+            font-size: 15px; 
+            cursor: pointer; 
+            list-style: none; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            user-select: none; 
+            transition: 0.2s; 
+        }
+        details.master-group > summary::-webkit-details-marker { display: none; }
+        details.master-group > summary:hover { background: #f1f5f9; }
+        .master-indicator { transition: transform 0.3s ease; color: var(--text-muted); font-size: 12px;}
+        details.master-group[open] .master-indicator { transform: rotate(180deg); }
+        .master-content { padding: 18px; display: flex; flex-direction: column; gap: 16px; background: var(--bg-color); }
+
+        .param-group { padding: 0; margin-bottom: 0; }
+        .sub-label { font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .hint-text { font-size: 12px; color: var(--text-muted); font-weight: 400; margin-left: 6px;}
+
+        /* === 自訂元件：Toggle 開關 === */
+        .toggle-wrapper { display: flex; align-items: center; cursor: pointer; gap: 10px; font-size: 13px; font-weight: 500; color: var(--text-main); margin-bottom: 8px;}
+        .toggle-switch { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0;}
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border-color); transition: .3s; border-radius: 20px; }
+        .toggle-slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .toggle-switch input:checked + .toggle-slider { background-color: var(--accent); }
+        .toggle-switch input:checked + .toggle-slider:before { transform: translateX(16px); }
+
+        /* === 自訂元件：Radio 按鈕群組 === */
+        .radio-group { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 6px;}
+        .radio-label { display: flex; align-items: center; cursor: pointer; font-size: 13px; color: var(--text-main); font-weight: 500;}
+        .radio-label input[type="radio"] { margin-right: 6px; cursor: pointer; accent-color: var(--accent); width: 16px; height: 16px; flex-shrink: 0;}
+
+        /* === 自訂元件：滑桿與數字同步 === */
+        .slider-group { margin-bottom: 12px; }
+        .slider-row { display: flex; align-items: center; gap: 12px; }
+        .slider-row input[type="range"] { flex: 1; accent-color: var(--accent); height: 4px; background: var(--border-color); border-radius: 2px; appearance: none; outline: none; cursor: pointer; min-width: 50px;}
+        .slider-row input[type="range"]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; background: var(--accent); border-radius: 50%; cursor: pointer; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2);}
+        .slider-row input[type="number"] { width: 70px; padding: 6px 10px; font-size: 13px; text-align: center; }
+
+        .nested-box { background: var(--bg-muted); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); }
+
+        /* 按鈕樣式 */
+        .btn-primary { 
+            background-color: var(--accent); color: white; padding: 14px 20px; 
+            border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; 
+            transition: 0.2s; width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px; box-sizing: border-box;
+        }
+        .btn-primary:hover { background-color: var(--accent-hover); }
+        
+        .btn-secondary { 
+            background: var(--bg-color); color: var(--text-main); padding: 10px; border: 1px solid var(--border-color); 
+            border-radius: 8px; cursor: pointer; width: 100%; font-weight: 500; transition: 0.2s; font-size: 13px;
+            display: flex; justify-content: center; align-items: center; gap: 6px; box-sizing: border-box;
+        }
+        .btn-secondary:hover { background: var(--bg-muted); border-color: #cbd5e1; }
+
+        /* 輸出區塊與徽章 */
+        .output-container { display: flex; flex-direction: column; gap: 16px; }
+        .output-box { background: var(--bg-color); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); }
+        .output-header { font-weight: 600; font-size: 13px; margin-bottom: 16px; color: var(--text-main); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;}
+        .format-badge { font-size: 10px; font-weight: 600; color: var(--text-muted); background: var(--bg-muted); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); letter-spacing: 0.5px; white-space: nowrap;}
+
+        /* === 儀表板樣式 === */
+        .dashboard { display: flex; flex-direction: column; gap: 12px; margin-top: 5px; margin-bottom: 24px; }
+        
+        .dash-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        .dash-card { background: var(--bg-muted); border-radius: 8px; padding: 14px; border: 1px solid var(--border-color); display: flex; flex-direction: column; justify-content: center;}
+        .dash-label { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;}
+        .dash-value { font-size: 16px; font-weight: 700; color: var(--text-main); word-break: break-all;}
+        .dash-value.mono { font-family: ui-monospace, monospace; font-size: 13px; }
+
+        .dash-time-container { display: flex; gap: 12px; flex-wrap: wrap;}
+        .dash-time-card { flex: 1; min-width: 150px; background: var(--bg-muted); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; display: flex; align-items: center; justify-content: space-between; }
+        .dash-time-title { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;}
+        .dash-time-info { font-size: 16px; font-weight: 700; color: var(--text-main); }
+        .dash-time-icon { display: flex; align-items: center; justify-content: center; opacity: 0.8; flex-shrink: 0;}
+
+        /* 地圖區塊 */
+        .maps-container { flex: 1.5; display: flex; flex-direction: column; gap: 24px; min-width: 380px;}
+        .map-box { position: relative; display: flex; flex-direction: column;}
+        .map-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;}
+        .map-title { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: var(--text-main);}
+        .map-frame { flex-grow: 1; min-height: 400px; border-radius: 12px; border: 1px solid var(--border-color); z-index: 1; overflow: hidden; position: relative;}
+        
+        .empty-state {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(4px);
+            z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center;
+            color: var(--text-muted); transition: opacity 0.3s ease; border-radius: 12px; padding: 20px; text-align: center;
+        }
+        .empty-state span { font-size: 13px; font-weight: 500;}
+        .empty-state.hidden { display: none !important; }
+
+        .map-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;}
+        .toggle-group { display: flex; gap: 12px; background: var(--bg-muted); padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-color); flex-wrap: wrap;}
+        
+        .tool-btn { background: var(--bg-color); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--text-main); transition: 0.2s; display: flex; align-items: center; gap: 6px; box-sizing: border-box;}
+        .tool-btn:hover { background: var(--bg-muted); border-color: #cbd5e1;}
+        .tool-btn.dark { background: var(--text-main); color: #fff; border-color: var(--text-main);}
+        .tool-btn.dark:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+        .tool-btn.danger { color: #ef4444; }
+        .tool-btn.danger:hover { background: #fef2f2; border-color: #fca5a5; }
+
+        .viewer-toolbar { display: flex; justify-content: space-between; align-items: center; background: var(--bg-muted); padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 12px; flex-wrap: wrap; gap: 10px;}
+        .toolbar-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+        .node-label { background: transparent; border: none; box-shadow: none; font-size: 11px; font-weight: bold; color: var(--text-main); text-align: center; text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff; }
+        .leaflet-popup-content-wrapper { border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid var(--border-color); }
+        .leaflet-popup-content { margin: 12px 16px; font-size: 13px; line-height: 1.5; color: var(--text-main); }
+        
+        /* Viewer 清單 */
+        .draggable-list { margin-top: 10px; max-height: 380px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-color); padding: 8px; }
+        .draggable-item { padding: 10px 14px; margin-bottom: 6px; background: var(--bg-muted); border: 1px solid transparent; border-radius: 6px; display: flex; align-items: center; gap: 12px; cursor: pointer; font-family: ui-monospace, monospace; font-size: 13px; color: var(--text-main); transition: 0.2s; flex-wrap: wrap;}
+        .draggable-item:last-child { margin-bottom: 0; }
+        .draggable-item:hover { border-color: var(--border-color); }
+        .draggable-item.selected-item { background: #fef2f2; color: #991b1b; border-color: #fca5a5;}
+        .draggable-item.dragging { opacity: 0.5; }
+        .draggable-item.over { border: 1px dashed var(--text-main); background: #f3f4f6; }
+        .drag-handle { color: var(--text-muted); cursor: grab; padding: 0 4px; flex-shrink: 0;}
+        .drag-handle:active { cursor: grabbing;}
+        .point-num { background: #e2e8f0; color: var(--text-main); padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px; text-align: center; flex-shrink: 0;}
+        .selected-item .point-num { background: #fca5a5; color: #7f1d1d; }
+        .coord-text { flex: 1; word-break: break-all; min-width: 120px;}
+
+        .custom-marker { width: 24px; height: 24px; background: var(--text-main); border: 2px solid #fff; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: 0.2s;}
+        .custom-marker.selected { background: var(--brand-harvest); box-shadow: 0 0 0 2px var(--brand-harvest); z-index: 1000 !important;}
+
+        /* === 響應式佈局 (RWD) 深度最佳化 === */
+        @media (max-width: 768px) {
+            body { padding: 16px 12px; }
+            .main-wrapper { padding: 20px; border-radius: 12px; }
+            .container { flex-direction: column; gap: 24px; }
+            .panel, .maps-container { min-width: 0; width: 100%; flex-basis: 100%; }
+            .dash-grid { grid-template-columns: 1fr; }
+            
+            .header-container { flex-direction: column; align-items: stretch; gap: 16px; padding-bottom: 20px; margin-bottom: 20px;}
+            .app-header { gap: 8px; justify-content: space-between; }
+            .app-tab-btn { flex: 1; justify-content: center; padding: 10px 0; }
+            .help-btn { justify-content: center; width: 100%; }
+
+            .viewer-toolbar { flex-direction: column; align-items: stretch; gap: 12px; }
+            .toolbar-group { flex-wrap: wrap; justify-content: flex-start; }
+            .tool-btn { flex: 1; justify-content: center; min-width: 80px; padding: 8px 12px;}
+            
+            .map-frame { min-height: 350px; }
+        }
+        
+        .footer-note { 
+            text-align: center; 
+            margin-top: 40px; 
+            padding-top: 20px; 
+            border-top: 1px solid var(--border-color); 
+            color: var(--text-muted); 
+            font-size: 12px; 
+            line-height: 1.5; 
+        }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(17, 24, 39, 0.4); display: flex; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(4px); animation: fadeIn 0.2s ease;}
+        .modal-content { background: var(--bg-color); width: 90%; max-width: 600px; border-radius: 12px; padding: 32px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); position: relative; max-height: 85vh; overflow-y: auto;}
+        .modal-header { font-size: 18px; font-weight: 700; color: var(--text-main); margin-bottom: 20px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px;}
+        .modal-close { position: absolute; top: 24px; right: 24px; background: transparent; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); transition: 0.2s; line-height: 1;}
+        .modal-close:hover { color: var(--text-main); }
+        .modal-section { margin-bottom: 20px; }
+        .modal-section h4 { color: var(--text-main); font-size: 14px; margin-bottom: 8px; margin-top: 0;}
+        .modal-section p { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 6px;}
+        .disclaimer-box { background: var(--bg-muted); border: 1px solid var(--border-color); border-radius: 6px; padding: 16px; margin-top: 24px; }
+        .disclaimer-box p { color: var(--text-muted); font-size: 12px; margin: 0; }
+        
+        .layer-toggle-container { display: flex; align-items: center; gap: 12px; padding: 4px 0; }
+    </style>
+</head>
+<body>
+
+<div class="main-wrapper">
+    <div class="header-container">
+        <div class="header-left">
+            <h2><i data-lucide="map-pinned"></i> JumpJump GPX Flow</h2>
+            <p class="subtitle">自動化極簡路線生成工具</p>
+        </div>
+        <div>
+            <button class="help-btn" onclick="toggleModal('helpModal', true)"><i data-lucide="info"></i> 說明與免責聲明</button>
+        </div>
+        
+        <div class="app-header">
+            <button id="btn-tab-gen" class="app-tab-btn active" onclick="switchAppTab('generator')"><i data-lucide="sparkles"></i> 路徑生成器</button>
+            <button id="btn-tab-view" class="app-tab-btn" onclick="switchAppTab('viewer')"><i data-lucide="edit-3"></i> 預覽與編輯器</button>
+        </div>
+    </div>
+
+    <div id="helpModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this) toggleModal('helpModal', false)">
+        <div class="modal-content">
+            <button class="modal-close" onclick="toggleModal('helpModal', false)"><i data-lucide="x"></i></button>
+            <div class="modal-header"><i data-lucide="book-open"></i> 操作指南</div>
+            <div class="modal-section">
+                <h4>路徑生成器</h4>
+                <p>直接貼上中心座標，一鍵產出具備繞圈、跳躍緩衝與隨機偏移的雙版本 GPX (花與果)。</p>
+            </div>
+            <div class="modal-section">
+                <h4>預覽與編輯器</h4>
+                <p>貼上座標後可在地圖上預覽，支援拖曳改變點位、點擊地圖新增座標、多點選取與互換排序。</p>
+            </div>
+            <div class="disclaimer-box">
+                <p><strong>MIT License</strong><br>本工具僅供程式開發測試、幾何運算研究及自動化腳本概念驗證使用。</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 模式 1：GPX 路徑生成器 -->
+    <!-- ========================================== -->
+    <div id="app-generator" class="app-content active">
+        <div class="container">
+            <div class="panel">
+                
+                <div>
+                    <div class="section-title"><i data-lucide="map-pin"></i> 載入中心座標</div>
+                    <textarea id="inputCoords" placeholder="請貼上座標 (系統將自動清除文字與重複點位)..."></textarea>
+                </div>
+
+                <div id="statsDashboard" class="dashboard" style="display: none;">
+                    <div class="dash-grid">
+                        <div class="dash-card">
+                            <div class="dash-label"><i data-lucide="hash"></i> 獨立點數</div>
+                            <div class="dash-value" id="dash-points">0 點</div>
+                        </div>
+                        <div class="dash-card">
+                            <div class="dash-label"><i data-lucide="ruler"></i> 物理距離</div>
+                            <div class="dash-value" id="dash-dist">0 km</div>
+                        </div>
+                        <div class="dash-card">
+                            <div class="dash-label"><i data-lucide="flag-triangle-right"></i> 起始座標</div>
+                            <div class="dash-value mono" id="dash-start">0, 0</div>
+                        </div>
+                        <div class="dash-card">
+                            <div class="dash-label"><i data-lucide="crosshair"></i> 重心終點</div>
+                            <div class="dash-value mono" id="dash-center">0, 0</div>
+                        </div>
+                    </div>
+                    <div class="dash-time-container">
+                        <div class="dash-time-card">
+                            <div>
+                                <div class="dash-time-title"><i data-lucide="timer"></i> 繞圈種花耗時 (1秒/點)</div>
+                                <div class="dash-time-info" id="dash-time-plant">約 0 分 0 秒</div>
+                            </div>
+                            <div class="dash-time-icon"><i data-lucide="sprout" style="color:var(--brand-plant);"></i></div>
+                        </div>
+                        <div class="dash-time-card">
+                            <div>
+                                <div class="dash-time-title"><i data-lucide="rocket"></i> 路線收果耗時 (1秒/點)</div>
+                                <div class="dash-time-info" id="dash-time-harvest">約 0 分 0 秒</div>
+                            </div>
+                            <div class="dash-time-icon"><i data-lucide="cherry" style="color:var(--brand-harvest);"></i></div>
+                        </div>
+                    </div>
+                </div>
+
+                <details class="master-group">
+                    <summary>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <i data-lucide="settings-2"></i>
+                            <span>種花規則與策略設定</span>
+                        </div>
+                        <span class="master-indicator">▼</span>
+                    </summary>
+                    <div class="master-content">
+                        <div class="param-group">
+                            <span class="sub-label">路徑排序</span>
+                            <div class="radio-group">
+                                <label class="radio-label"><input type="radio" name="pathSort" value="auto" checked> 自動最短路徑</label>
+                                <label class="radio-label"><input type="radio" name="pathSort" value="original"> 依貼上順序</label>
+                            </div>
+
+                            <span class="sub-label" style="margin-top: 10px;">路徑終點</span>
+                            <div class="radio-group">
+                                <label class="radio-label"><input type="radio" name="pathEnd" value="last" checked> 最後座標</label>
+                                <label class="radio-label"><input type="radio" name="pathEnd" value="center"> 幾何中心</label>
+                                <label class="radio-label"><input type="radio" name="pathEnd" value="first"> 回起點</label>
+                            </div>
+
+                            <div style="height: 1px; background: var(--border-color); margin: 14px 0;"></div>
+
+                            <span class="sub-label">繞圈策略</span>
+                            <label class="toggle-wrapper">
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="smartChain" checked>
+                                    <span class="toggle-slider"></span>
+                                </div>
+                                啟用交疊路徑 8 字智慧連貫
+                            </label>
+
+                            <label class="toggle-wrapper">
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="crossCenter">
+                                    <span class="toggle-slider"></span>
+                                </div>
+                                <span>啟用穿心直徑進入</span>
+                            </label>
+
+                            <div class="radio-group" style="margin-top: 10px; margin-bottom: 8px;">
+                                <label class="radio-label"><input type="radio" name="loopStrategy" value="once" onchange="toggleLoop2(false)"> 繞一趟即停止</label>
+                                <label class="radio-label"><input type="radio" name="loopStrategy" value="twice" checked onchange="toggleLoop2(true)"> 自動跑兩趟 (補種)</label>
+                            </div>
+                            
+                            <div class="nested-box">
+                                <div class="slider-group">
+                                    <label class="sub-label" style="font-size: 12px;">第一趟圈數比例</label>
+                                    <div class="slider-row">
+                                        <input type="range" id="loop1Range" min="0.1" max="3.0" step="0.1" value="1.1" oninput="syncInput('loop1Range', 'loop1Ratio')">
+                                        <input type="number" id="loop1Ratio" value="1.1" min="0.1" step="0.1" oninput="syncInput('loop1Ratio', 'loop1Range')">
+                                    </div>
+                                </div>
+                                <div id="loop2Options" style="transition: 0.3s;">
+                                    <div class="slider-group" style="margin-bottom: 12px;">
+                                        <label class="sub-label" style="font-size: 12px;">第二趟圈數比例</label>
+                                        <div class="slider-row">
+                                            <input type="range" id="loop2Range" min="0.1" max="3.0" step="0.1" value="1.0" oninput="syncInput('loop2Range', 'loop2Ratio')">
+                                            <input type="number" id="loop2Ratio" value="1.0" min="0.1" step="0.1" oninput="syncInput('loop2Ratio', 'loop2Range')">
+                                        </div>
+                                    </div>
+                                    <label class="toggle-wrapper" style="margin-bottom: 0;">
+                                        <div class="toggle-switch"><input type="checkbox" id="interleaveLoop" checked><span class="toggle-slider"></span></div>
+                                        第二圈交錯
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <details class="master-group">
+                    <summary>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <i data-lucide="sliders"></i>
+                            <span>種花參數微調與緩衝</span>
+                        </div>
+                        <span class="master-indicator">▼</span>
+                    </summary>
+                    <div class="master-content">
+                        <div class="slider-group">
+                            <label class="sub-label">繞圈半徑 (m)</label>
+                            <div class="slider-row">
+                                <input type="range" id="radiusRange" min="10" max="100" value="30" oninput="syncInput('radiusRange', 'circleRadius')">
+                                <input type="number" id="circleRadius" value="30" min="10" oninput="syncInput('circleRadius', 'radiusRange')">
+                            </div>
+                        </div>
+                        
+                        <div class="slider-group">
+                            <label class="sub-label">單圈產生點數</label>
+                            <div class="slider-row">
+                                <input type="range" id="pointsRange" min="4" max="24" value="8" oninput="syncInput('pointsRange', 'circlePoints')">
+                                <input type="number" id="circlePoints" value="8" min="4" oninput="syncInput('circlePoints', 'pointsRange')">
+                            </div>
+                        </div>
+
+                        <div class="slider-group">
+                            <label class="sub-label">步行補點間距 (m)</label>
+                            <div class="slider-row">
+                                <input type="range" id="distRange" min="1" max="20" step="0.5" value="6" oninput="syncInput('distRange', 'maxDistance')">
+                                <input type="number" id="maxDistance" value="6" min="1" step="0.5" oninput="syncInput('maxDistance', 'distRange')">
+                            </div>
+                        </div>
+
+                        <div class="slider-group">
+                            <label class="sub-label">大跳躍觸發門檻 (m)</label>
+                            <div class="slider-row">
+                                <input type="range" id="threshRange" min="10" max="500" value="150" oninput="syncInput('threshRange', 'jumpThreshold')">
+                                <input type="number" id="jumpThreshold" value="150" min="10" oninput="syncInput('jumpThreshold', 'threshRange')">
+                            </div>
+                        </div>
+
+                        <div class="nested-box" style="margin-top: 10px;">
+                            <span class="sub-label"><i data-lucide="zap" style="color:var(--text-muted);"></i>跳躍停留緩衝</span>
+                            <div style="display: flex; gap: 15px; margin-bottom: 12px; margin-top: 8px; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 100px;">
+                                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">基本 (點/秒)</label>
+                                    <input type="number" id="jumpBuffer" value="3" min="0" style="width: 100%; padding: 6px;">
+                                </div>
+                                <div style="flex: 1; min-width: 100px;">
+                                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">上限 (點/秒)</label>
+                                    <input type="number" id="maxJumpBuffer" value="15" min="3" style="width: 100%; padding: 6px;">
+                                </div>
+                            </div>
+                            <label class="toggle-wrapper" style="margin-bottom: 0;">
+                                <div class="toggle-switch"><input type="checkbox" id="dynamicBuffer" checked><span class="toggle-slider"></span></div>
+                                動態倍增 (依距離曲線遞減)
+                            </label>
+                        </div>
+
+                        <div class="nested-box">
+                            <span class="sub-label"><i data-lucide="rotate-cw" style="color:var(--text-muted);"></i>繞圈停留緩衝</span>
+                            <div style="display: flex; align-items: center; gap: 15px; margin-top: 8px; flex-wrap: wrap;">
+                                <input type="number" id="loopBuffer" value="1" min="0" style="width: 80px; padding: 6px;">
+                                <label class="toggle-wrapper" style="margin-bottom: 0;">
+                                    <div class="toggle-switch"><input type="checkbox" id="enableLoopBuffer" checked><span class="toggle-slider"></span></div>
+                                    啟用緩衝
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <details class="master-group" id="harvestGroup">
+                    <summary>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <i data-lucide="cherry"></i>
+                            <span>收果策略與參數設定</span>
+                        </div>
+                        <span class="master-indicator">▼</span>
+                    </summary>
+                    <div class="master-content">
+                        <div class="param-group">
+                            <span class="sub-label">收果模式</span>
+                            <div class="radio-group" style="flex-direction: column; align-items: flex-start;">
+                                <label class="radio-label"><input type="radio" name="harvestStrategy" value="pure" onchange="toggleHarvestOptions()"> 原座標連線</label>
+                                <label class="radio-label"><input type="radio" name="harvestStrategy" value="jump_exact" onchange="toggleHarvestOptions()"> 原點跳躍收果</label>
+                                <label class="radio-label"><input type="radio" name="harvestStrategy" value="jump_offset" checked onchange="toggleHarvestOptions()"> 圓弧跳躍收果</label>
+                            </div>
+                            
+                            <div id="harvestOffsetConfig" style="margin-top: 16px;">
+                                <div class="slider-group">
+                                    <label class="sub-label" style="font-size: 12px;">偏移距離下限 (m)</label>
+                                    <div class="slider-row">
+                                        <input type="range" id="harvestOffsetMinRange" min="10" max="200" value="60" oninput="syncInput('harvestOffsetMinRange', 'harvestOffsetMin')">
+                                        <input type="number" id="harvestOffsetMin" value="60" min="10" max="200" oninput="syncInput('harvestOffsetMin', 'harvestOffsetMinRange')">
+                                    </div>
+                                </div>
+                                <div class="slider-group" style="margin-bottom: 0;">
+                                    <label class="sub-label" style="font-size: 12px;">偏移距離上限 (m)</label>
+                                    <div class="slider-row">
+                                        <input type="range" id="harvestOffsetMaxRange" min="10" max="200" value="75" oninput="syncInput('harvestOffsetMaxRange', 'harvestOffsetMax')">
+                                        <input type="number" id="harvestOffsetMax" value="75" min="10" max="200" oninput="syncInput('harvestOffsetMax', 'harvestOffsetMaxRange')">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="harvestSequenceConfig" class="nested-box" style="margin-top: 16px;">
+                                <span class="sub-label" style="margin-bottom: 12px;"><i data-lucide="list-ordered" style="color:var(--text-muted);"></i>跳躍收果動作序列</span>
+                                
+                                <div style="display: flex; gap: 15px; margin-bottom: 12px; flex-wrap: wrap;">
+                                    <div style="flex: 1; min-width: 100px;">
+                                        <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">跳躍後緩衝 (秒)</label>
+                                        <input type="number" id="harvestWait1" value="2" min="0" style="width: 100%; padding: 6px;">
+                                    </div>
+                                    <div style="flex: 1; min-width: 100px;">
+                                        <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">步行後停留 (秒)</label>
+                                        <input type="number" id="harvestWait2" value="2" min="0" style="width: 100%; padding: 6px;">
+                                    </div>
+                                </div>
+                                
+                                <div style="height: 1px; background: var(--border-color); margin: 12px 0;"></div>
+
+                                <label style="font-size: 11px; color: var(--text-main); display: block; margin-bottom: 8px;">模擬步行微調 (若為圓弧收果則沿半徑繞行)</label>
+                                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                                    <div style="flex: 1; min-width: 100px;">
+                                        <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">步行距離 (m)</label>
+                                        <input type="number" id="harvestWalkDist" value="10" min="1" style="width: 100%; padding: 6px;">
+                                    </div>
+                                    <div style="flex: 1; min-width: 100px;">
+                                        <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">插入點位數</label>
+                                        <input type="number" id="harvestWalkPoints" value="3" min="1" style="width: 100%; padding: 6px;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <div class="param-group" style="margin-bottom: 0; border: none; padding: 0;">
+                    <div class="section-title" style="margin-bottom: 12px;"><i data-lucide="tag"></i> 自訂匯出設定</div>
+                    <input type="text" id="gpxLocationName" placeholder="自訂地點名稱 (留空將自動偵測)" style="width: 100%; margin-bottom: 12px;">
+                    <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+                        <label class="toggle-wrapper">
+                            <div class="toggle-switch"><input type="checkbox" id="enablePrefix" checked><span class="toggle-slider"></span></div>
+                            加入前綴 (jf_)
+                        </label>
+                        <label class="toggle-wrapper">
+                            <div class="toggle-switch"><input type="checkbox" id="enablePostfix" checked><span class="toggle-slider"></span></div>
+                            加入後綴 (日期)
+                        </label>
+                    </div>
+                </div>
+
+                <button class="btn-primary" onclick="processAll()"><i data-lucide="cpu"></i> 產出 GPX 路徑</button>
+
+                <div class="output-container">
+                    <div class="output-box">
+                        <div class="output-header" style="margin-bottom: 16px;">
+                            <span style="display: flex; align-items: center; gap: 6px;"><i data-lucide="sprout" style="color:var(--brand-plant);"></i> 花 (繞圈)</span>
+                            <span class="format-badge">WPT 格式</span>
+                        </div>
+                        <textarea id="outputPlantGPX" style="display: none;"></textarea>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <button class="btn-secondary" onclick="downloadGPX('花', 'outputPlantGPX', 'gpxLocationName')"><i data-lucide="download"></i> 下載 GPX 檔案</button>
+                            <button class="btn-secondary" onclick="copyFullGPX('outputPlantGPX')"><i data-lucide="file-code-2"></i> 複製完整 GPX</button>
+                            <button class="btn-secondary" onclick="copyPureCoordsFromGPX('outputPlantGPX')"><i data-lucide="list-ordered"></i> 複製純座標 (Lat, Lon)</button>
+                        </div>
+                    </div>
+                    <div class="output-box">
+                        <div class="output-header" style="margin-bottom: 16px;">
+                            <span style="display: flex; align-items: center; gap: 6px;"><i data-lucide="cherry" style="color:var(--brand-harvest);"></i> 果 (收成)</span>
+                            <span class="format-badge">WPT 格式</span>
+                        </div>
+                        <textarea id="outputHarvestGPX" style="display: none;"></textarea>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <button class="btn-secondary" onclick="downloadGPX('果', 'outputHarvestGPX', 'gpxLocationName')"><i data-lucide="download"></i> 下載 GPX 檔案</button>
+                            <button class="btn-secondary" onclick="copyFullGPX('outputHarvestGPX')"><i data-lucide="file-code-2"></i> 複製完整 GPX</button>
+                            <button class="btn-secondary" onclick="copyPureCoordsFromGPX('outputHarvestGPX')"><i data-lucide="list-ordered"></i> 複製純座標 (Lat, Lon)</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="maps-container">
+                <div class="map-box">
+                    <div class="map-header">
+                        <div class="map-title"><i data-lucide="map"></i> 種花路徑 <span class="hint-text">(紅:繞圈 橘:步行 紫:跳躍 藍:緩衝 灰:40m範圍)</span></div>
+                        <div class="map-controls">
+                            <div id="layerToggles" class="toggle-group" style="display: none;">
+                                <label class="toggle-wrapper" style="margin-bottom: 0;">
+                                    <div class="toggle-switch" style="width: 28px; height: 16px;"><input type="checkbox" id="showPass1" checked onchange="reRenderGeneratorMaps()"><span class="toggle-slider" style="border-radius:16px;"></span></div>
+                                    <span style="font-size: 11px;">趟次一</span>
+                                </label>
+                                <label class="toggle-wrapper" style="margin-bottom: 0;">
+                                    <div class="toggle-switch" style="width: 28px; height: 16px;"><input type="checkbox" id="showPass2" checked onchange="reRenderGeneratorMaps()"><span class="toggle-slider" style="border-radius:16px;"></span></div>
+                                    <span style="font-size: 11px;">趟次二</span>
+                                </label>
+                            </div>
+                            <div id="plantAnimControls" style="display: none; align-items: center; gap: 8px;">
+                                <select id="plantAnimSpeed" onchange="changePlantAnimSpeed()" style="padding: 4px 6px; font-size: 12px; border: none; background: var(--bg-muted);">
+                                    <option value="150">極慢</option>
+                                    <option value="80">慢速</option>
+                                    <option value="40" selected>正常</option>
+                                    <option value="10">極快</option>
+                                </select>
+                                <button id="btn-play-plant" onclick="togglePlantAnimation()" class="tool-btn dark" style="padding: 4px 12px;"><i data-lucide="play"></i> 模擬</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="mapPlant" class="map-frame">
+                        <div id="emptyStatePlant" class="empty-state">
+                            <i data-lucide="map-pinned"></i>
+                            <span>請貼上座標並產出路徑</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="map-box">
+                    <div class="map-header">
+                        <div class="map-title"><i data-lucide="map"></i> 收果路徑 <span class="hint-text" id="harvestMapHint">(紅:目標 橘:步行 紫:緩衝 灰:40m範圍)</span></div>
+                    </div>
+                    <div id="mapHarvest" class="map-frame">
+                        <div id="emptyStateHarvest" class="empty-state">
+                            <i data-lucide="map-pinned"></i>
+                            <span>請貼上座標並產出路徑</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- 模式 2：預覽與編輯器 -->
+    <!-- ========================================== -->
+    <div id="app-viewer" class="app-content">
+        <div class="container">
+            <div class="panel">
+                <div>
+                    <div class="section-title"><i data-lucide="file-edit"></i> 載入還原點</div>
+                    <p class="hint-text" style="margin-left: 0; margin-bottom: 12px;">地圖的編輯操作不會修改此輸入框內容。</p>
+                    <textarea id="viewerInput" style="height: 120px;" placeholder="在此貼上座標群..."></textarea>
+                    
+                    <button class="btn-secondary" style="margin-top: 12px;" onclick="previewCoordinates()"><i data-lucide="eye"></i> 載入 / 更新地圖</button>
+                    
+                    <div id="viewerTools" style="display: none; margin-top: 24px;">
+                        <div id="viewerStats" class="stats"></div>
+                        
+                        <div style="display: flex; gap: 12px; margin-top: 16px; margin-bottom: 16px; flex-wrap: wrap;">
+                            <button class="btn-secondary" style="flex: 1; min-width: 120px;" onclick="autoPlanViewer()"><i data-lucide="route"></i> 最短路徑</button>
+                            <button class="btn-secondary" style="flex: 1; min-width: 120px;" onclick="resetViewer()"><i data-lucide="rotate-ccw"></i> 回復初始</button>
+                        </div>
+                        
+                        <button class="btn-primary" onclick="copyViewerCoords()"><i data-lucide="copy"></i> 複製純座標 (Lat, Lon)</button>
+
+                        <div class="nested-box" style="margin-top: 24px;">
+                            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--text-main);">手動加入單一座標：</label>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <input type="text" id="manualCoordAdd" placeholder="lat, lon" style="flex:1; min-width: 150px;">
+                                <button class="tool-btn dark" style="flex-shrink: 0; min-width: 100px; justify-content: center;" onclick="addManualCoordViewer()"><i data-lucide="plus"></i>加入最後</button>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 24px; margin-bottom: 8px;">
+                            <span style="font-weight: 600; font-size: 14px; color: var(--text-main);">點位清單 (拖曳排序 / 點擊選取)：</span>
+                        </div>
+                        <div id="sortableList" class="draggable-list"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="maps-container">
+                <div class="map-box" style="height: 100%;">
+                    
+                    <div class="map-header" style="margin-bottom: 16px;">
+                        <div class="map-title"><i data-lucide="map"></i> 互動編輯器</div>
+                    </div>
+
+                    <div id="viewerEditorTools" class="viewer-toolbar" style="display: none;">
+                        <div class="toolbar-group">
+                            <label class="radio-label"><input type="radio" name="mapMode" value="select" checked onchange="setMapMode('select')"> 選取/拖曳</label>
+                            <label class="radio-label" style="margin-left: 12px;"><input type="radio" name="mapMode" value="add" onchange="setMapMode('add')"> 點擊新增</label>
+                        </div>
+                        <div class="toolbar-group">
+                            <button class="tool-btn" onclick="undoViewerState()"><i data-lucide="undo"></i> 復原</button>
+                            <button class="tool-btn" onclick="selectAllViewer()"><i data-lucide="check-square"></i> 全選</button>
+                            <button class="tool-btn" onclick="clearSelectionViewer()"><i data-lucide="square-dashed"></i> 取消</button>
+                            <button class="tool-btn" onclick="swapSelectedViewer()"><i data-lucide="arrow-left-right"></i> 互換</button>
+                            <button class="tool-btn danger" onclick="deleteSelectedViewer()"><i data-lucide="trash-2"></i> 刪除</button>
+                        </div>
+                    </div>
+                    
+                    <div id="mapViewer" class="map-frame" style="min-height: 600px;">
+                        <div id="emptyStateViewer" class="empty-state">
+                            <i data-lucide="mouse-pointer-click"></i>
+                            <span>請載入座標以啟動編輯器</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 授權與版權聲明 -->
+    <div class="footer-note">
+        JumpJump GPX Flow &copy; 2026<br>
+        Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" style="color: var(--text-muted); text-decoration: underline;">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attributions" target="_blank" style="color: var(--text-muted); text-decoration: underline;">CARTO</a>.
+    </div>
+</div>
+
+    <!-- ========================================== -->
+    <!-- ⚠️ 核心 JavaScript ⚠️ -->
+    <!-- ========================================== -->
+    <script>
+        lucide.createIcons();
+
+        let mapPlant, mapHarvest, mapViewer;
+        let layersPlant = [], layersHarvest = [], layersViewer = [];
+        let originalViewerCoords = []; 
+        let currentViewerCoords = [];
+        
+        let globalPlantCoords = [];
+        let plantAnimTimer = null, plantAnimMarker = null, plantAnimIndex = 0;
+
+        let genState = null;
+        let viewerMapMode = 'select';
+        let selectedViewerIndices = new Set();
+        let viewerHistory = [];
+
+        function initMap() {
+            const tileUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+            
+            mapPlant = L.map('mapPlant').setView([20.27, 85.79], 15);
+            L.tileLayer(tileUrl, { maxZoom: 20 }).addTo(mapPlant);
+            
+            mapHarvest = L.map('mapHarvest').setView([20.27, 85.79], 15);
+            L.tileLayer(tileUrl, { maxZoom: 20 }).addTo(mapHarvest);
+
+            mapViewer = L.map('mapViewer').setView([20.27, 85.79], 15);
+            L.tileLayer(tileUrl, { maxZoom: 20 }).addTo(mapViewer);
+
+            mapViewer.on('click', function(e) {
+                if (viewerMapMode === 'add') {
+                    saveViewerState();
+                    currentViewerCoords.push({ lat: e.latlng.lat, lon: e.latlng.lng });
+                    renderViewerData();
+                } else {
+                    selectedViewerIndices.clear();
+                    renderViewerData();
+                }
+            });
+
+            toggleHarvestOptions();
+        }
+
+        function hideEmptyState(tab) {
+            if(tab === 'gen') {
+                const el1 = document.getElementById('emptyStatePlant');
+                const el2 = document.getElementById('emptyStateHarvest');
+                if (el1) el1.classList.add('hidden');
+                if (el2) el2.classList.add('hidden');
+            } else if (tab === 'view') {
+                const el = document.getElementById('emptyStateViewer');
+                if (el) el.classList.add('hidden');
+            }
+        }
+
+        function syncInput(sourceId, targetId) {
+            document.getElementById(targetId).value = document.getElementById(sourceId).value;
+        }
+
+        function toggleHarvestOptions() {
+            const stratElement = document.querySelector('input[name="harvestStrategy"]:checked');
+            if(!stratElement) return;
+            const strat = stratElement.value;
+            const hint = document.getElementById('harvestMapHint');
+            
+            document.getElementById('harvestOffsetConfig').style.display = (strat === 'jump_offset') ? 'block' : 'none';
+            document.getElementById('harvestSequenceConfig').style.display = (strat !== 'pure') ? 'block' : 'none';
+
+            if(hint) {
+                if (strat === 'pure') {
+                    hint.innerText = "(直線連線, 無跳躍與緩衝, 灰:40m範圍)";
+                } else {
+                    hint.innerText = "(紅:目標 橘:步行 紫:緩衝 灰:40m範圍)";
+                }
+            }
+        }
+
+        function togglePlantAnimation() {
+            const btn = document.getElementById('btn-play-plant');
+            const speed = parseInt(document.getElementById('plantAnimSpeed').value) || 40;
+
+            if (plantAnimTimer) {
+                clearInterval(plantAnimTimer);
+                plantAnimTimer = null;
+                btn.innerHTML = '<i data-lucide="play"></i> 模擬';
+                lucide.createIcons();
+                return;
+            }
+
+            if (globalPlantCoords.length === 0) return;
+
+            if (plantAnimIndex >= globalPlantCoords.length) {
+                plantAnimIndex = 0;
+            }
+
+            if (!plantAnimMarker) {
+                plantAnimMarker = L.circleMarker([globalPlantCoords[0].lat, globalPlantCoords[0].lon], {
+                    radius: 6, color: '#0f172a', fillColor: '#ffffff', fillOpacity: 1, weight: 3, zIndexOffset: 1000
+                }).addTo(mapPlant);
+            }
+
+            btn.innerHTML = '<i data-lucide="pause"></i> 暫停';
+            lucide.createIcons();
+
+            plantAnimTimer = setInterval(() => {
+                if (plantAnimIndex >= globalPlantCoords.length) {
+                    clearInterval(plantAnimTimer);
+                    plantAnimTimer = null;
+                    btn.innerHTML = '<i data-lucide="rotate-ccw"></i> 重播';
+                    lucide.createIcons();
+                    return;
+                }
+
+                const pt = globalPlantCoords[plantAnimIndex];
+                const latlng = [pt.lat, pt.lon];
+                plantAnimMarker.setLatLng(latlng);
+
+                if (!mapPlant.getBounds().contains(latlng)) {
+                    mapPlant.panTo(latlng, {animate: true});
+                }
+                plantAnimIndex++;
+            }, speed);
+        }
+
+        function changePlantAnimSpeed() {
+            if (plantAnimTimer) {
+                clearInterval(plantAnimTimer);
+                plantAnimTimer = null;
+                togglePlantAnimation();
+            }
+        }
+
+        function toggleModal(modalId, show) {
+            document.getElementById(modalId).style.display = show ? 'flex' : 'none';
+        }
+
+        function switchAppTab(tabId) {
+            document.querySelectorAll('.app-tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.app-content').forEach(content => content.classList.remove('active'));
+
+            const targetBtn = document.getElementById('btn-tab-' + (tabId === 'generator' ? 'gen' : 'view'));
+            const targetContent = document.getElementById('app-' + tabId);
+
+            if (targetBtn) targetBtn.classList.add('active');
+            if (targetContent) targetContent.classList.add('active');
+
+            setTimeout(() => { 
+                if (tabId === 'generator') { 
+                    mapPlant.invalidateSize(); 
+                    mapHarvest.invalidateSize(); 
+                }
+                if (tabId === 'viewer') {
+                    mapViewer.invalidateSize();
+                }
+            }, 100);
+        }
+
+        function toggleLoop2(show) {
+            const div = document.getElementById('loop2Options');
+            div.style.opacity = show ? '1' : '0.4';
+            div.style.pointerEvents = show ? 'auto' : 'none';
+        }
+
+        function extractCoordinates(text) {
+            const regex = /([-+]?\d*\.?\d+)\s*,\s*([-+]?\d*\.?\d+)/g;
+            let match;
+            const uniqueCoords = new Set();
+            let coords = [];
+            while ((match = regex.exec(text)) !== null) {
+                const lat = parseFloat(match[1]);
+                const lon = parseFloat(match[2]);
+                const key = `${lat},${lon}`;
+                if (!uniqueCoords.has(key)) {
+                    uniqueCoords.add(key);
+                    coords.push({lat, lon});
+                }
+            }
+            return coords;
+        }
+
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const p1 = lat1 * Math.PI/180, p2 = lat2 * Math.PI/180;
+            const dp = (lat2-lat1) * Math.PI/180, dl = (lon2-lon1) * Math.PI/180;
+            const a = Math.sin(dp/2) * Math.sin(dp/2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl/2) * Math.sin(dl/2);
+            return R * 2 * Math.atan2(Math.sqrt(Math.min(1, a)), Math.sqrt(Math.max(0, 1-a)));
+        }
+        
+        function calcPathDistance(pathArray, jumpThresh = Infinity) {
+            let total = 0;
+            for(let i = 0; i < pathArray.length - 1; i++) {
+                if (pathArray[i+1].type === 'jump_buffer') continue; 
+                let d = getDistance(pathArray[i].lat, pathArray[i].lon, pathArray[i+1].lat, pathArray[i+1].lon);
+                if (d <= jumpThresh) { total += d; }
+            }
+            return total;
+        }
+
+        function sortShortestPath(centers) {
+            if (centers.length <= 1) return centers;
+            let unvisited = [...centers];
+            let current = unvisited.shift(); 
+            let sorted = [current];
+
+            while (unvisited.length > 0) {
+                let nearestIdx = 0;
+                let minDist = Infinity;
+                for (let i = 0; i < unvisited.length; i++) {
+                    let d = getDistance(current.lat, current.lon, unvisited[i].lat, unvisited[i].lon);
+                    if (d < minDist) { minDist = d; nearestIdx = i; }
+                }
+                current = unvisited.splice(nearestIdx, 1)[0];
+                sorted.push(current);
+            }
+            return sorted;
+        }
+
+        function generateCirclePoints(lat, lon, radius, pointsCount, circleRatio, angleOffset = 0, crossCenter = true, direction = 1) {
+            const R = 6371000;
+            const circle = [];
+            let startAngleOffset = angleOffset;
+
+            if (crossCenter) {
+                const angle1 = angleOffset * (Math.PI / 180);
+                const dLat1 = (radius * Math.cos(angle1)) / R;
+                const dLon1 = (radius * Math.sin(angle1)) / (R * Math.cos(lat * Math.PI / 180));
+                circle.push({ lat: lat + (dLat1 * 180 / Math.PI), lon: lon + (dLon1 * 180 / Math.PI), type: 'loop' });
+                circle.push({ lat: lat, lon: lon, type: 'loop' });
+                startAngleOffset = angleOffset + 180;
+            }
+
+            const steps = Math.round(pointsCount * circleRatio);
+            const stepDegrees = 360 / pointsCount;
+            for (let i = 0; i <= steps; i++) {
+                const angle = (startAngleOffset + direction * i * stepDegrees) * (Math.PI / 180);
+                const dLat = (radius * Math.cos(angle)) / R;
+                const dLon = (radius * Math.sin(angle)) / (R * Math.cos(lat * Math.PI / 180));
+                circle.push({ lat: lat + (dLat * 180 / Math.PI), lon: lon + (dLon * 180 / Math.PI), type: 'loop' });
+            }
+            return circle;
+        }
+
+        async function fetchLocationName(lat, lon, suffix, inputId) {
+            const inputEl = document.getElementById(inputId);
+            if (inputEl && !inputEl.value.trim()) {
+                inputEl.value = "地名偵測中...";
+                try {
+                    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&accept-language=zh-TW,zh-Hant,zh;q=0.9,en;q=0.8`);
+                    const data = await response.json();
+                    
+                    if (data && data.address) {
+                        const getZHTW = (str) => {
+                            if (!str) return '';
+                            let res = str.split(/[;；]/).pop().trim();
+                            const s2t = {
+                                '国':'國', '区':'區', '县':'縣', '岛':'島', '湾':'灣', '东':'東', '广':'廣', 
+                                '门':'門', '龙':'龍', '苏':'蘇', '宁':'寧', '济':'濟', '亚':'亞', '欧':'歐', 
+                                '纽':'紐', '兰':'蘭', '韩':'韓', '爱':'愛', '尔':'爾', '马':'馬', '来':'來', 
+                                '罗':'羅', '伦':'倫', '萨':'薩', '卢':'盧', '乌':'烏', '华':'華', '乔':'喬', 
+                                '盖':'蓋', '麦':'麥', '达':'達', '内':'內', '几':'幾', '业':'業', '场':'場',
+                                '顿':'頓', '奥':'奧', '温':'溫', '蒙':'蒙', '贝':'貝', '克':'克', '里':'里',
+                                '斯':'斯', '佛':'佛', '米':'米', '都':'都', '林':'林', '不':'不', '勒':'勒',
+                                '威':'威', '尼':'尼', '那':'那', '塞':'塞', '巴':'巴', '特':'特', '蒙':'蒙'
+                            };
+                            return res.split('').map(c => s2t[c] || c).join('');
+                        };
+
+                        let country = getZHTW(data.address.country);
+                        let region = getZHTW(data.address.city || data.address.town || data.address.county || data.address.state);
+
+                        const parts = [country, region].filter(Boolean);
+                        if (parts.length > 0) {
+                            inputEl.value = `${parts.join('_')}_${suffix}`;
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.error("地名解析失敗", e);
+                }
+                inputEl.value = `未知地點_${suffix}`;
+            }
+        }
+
+        function generateFileName(versionType, inputId) {
+            const locName = document.getElementById(inputId) ? document.getElementById(inputId).value.trim() : '';
+            const enablePrefix = document.getElementById('enablePrefix') ? document.getElementById('enablePrefix').checked : true;
+            const enablePostfix = document.getElementById('enablePostfix') ? document.getElementById('enablePostfix').checked : true;
+            
+            let parts = [];
+            if (enablePrefix) parts.push('jf');
+            parts.push(versionType);
+            
+            if (locName && !locName.includes('偵測中')) {
+                parts.push(locName);
+            }
+            
+            if (enablePostfix) {
+                const today = new Date();
+                const mmdd = String(today.getMonth() + 1).padStart(2, '0') + String(today.getDate()).padStart(2, '0');
+                parts.push(mmdd);
+            }
+            
+            return parts.join('_');
+        }
+
+        function coordsToGPX(coords, fileName) {
+            let gpxOutput = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+            gpxOutput += "<gpx version=\"1.1\" creator=\"jumpjump\">\n";
+            gpxOutput += "  <metadata><name>" + fileName + "</name></metadata>\n";
+            coords.forEach((c, index) => {
+                gpxOutput += "  <wpt lat=\"" + c.lat.toFixed(7) + "\" lon=\"" + c.lon.toFixed(7) + "\"><name>P" + (index + 1) + "</name></wpt>\n";
+            });
+            gpxOutput += "</gpx>";
+            return gpxOutput;
+        }
+
+        function downloadGPX(versionType, textAreaId, inputId) {
+            const textArea = document.getElementById(textAreaId);
+            if (!textArea || !textArea.value.trim()) {
+                alert("目前沒有可下載的 GPX 內容！");
+                return;
+            }
+            const gpxText = textArea.value;
+            const fileName = generateFileName(versionType, inputId) + '.gpx';
+            const blob = new Blob([gpxText], { type: 'application/gpx+xml;charset=utf-8' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+        }
+
+        function copyFullGPX(textAreaId) {
+            const textArea = document.getElementById(textAreaId);
+            if (!textArea || !textArea.value.trim()) {
+                alert("目前沒有可複製的內容！請先產生路徑。");
+                return;
+            }
+            navigator.clipboard.writeText(textArea.value).then(() => {
+                alert('✅ 完整 GPX 原始碼已複製！');
+            });
+        }
+
+        function copyPureCoordsFromGPX(textAreaId) {
+            const textArea = document.getElementById(textAreaId);
+            if (!textArea || !textArea.value.trim()) {
+                alert("目前沒有可複製的內容！請先產生路徑。");
+                return;
+            }
+            const gpxText = textArea.value;
+            const regex = /<wpt lat="([^"]+)" lon="([^"]+)">/g;
+            let match;
+            let coords = [];
+            while ((match = regex.exec(gpxText)) !== null) {
+                coords.push(`${match[1]},${match[2]}`);
+            }
+            if (coords.length === 0) {
+                alert("無法解析出有效的座標，請確認內容是否為 GPX 格式！");
+                return;
+            }
+            navigator.clipboard.writeText(coords.join('\n')).then(() => {
+                alert(`✅ 已成功複製 ${coords.length} 個純座標串！`);
+            });
+        }
+
+        function buildRouteFromCenters(centers, options) {
+            let sortedCenters = options.sortMode === 'auto' ? sortShortestPath([...centers]) : [...centers];
+            let rawCoords = [];
+
+            const runPass = (ratio, passNum) => {
+                let clusters = [];
+                let visited = new Set();
+                
+                for (let i = 0; i < sortedCenters.length; i++) {
+                    if (visited.has(i)) continue;
+                    let cluster = [sortedCenters[i]];
+                    visited.add(i);
+                    let queue = [sortedCenters[i]];
+                    while (queue.length > 0) {
+                        let curr = queue.shift();
+                        for (let j = 0; j < sortedCenters.length; j++) {
+                            if (!visited.has(j)) {
+                                if (getDistance(curr.lat, curr.lon, sortedCenters[j].lat, sortedCenters[j].lon) <= options.radius * 2.1) {
+                                    visited.add(j);
+                                    cluster.push(sortedCenters[j]);
+                                    queue.push(sortedCenters[j]);
+                                }
+                            }
+                        }
+                    }
+                    clusters.push(cluster);
+                }
+
+                clusters.forEach((cluster) => {
+                    let sortedCluster = cluster;
+
+                    sortedCluster.forEach((center, idx) => {
+                        let startAngleOffset = 0;
+                        let direction = (idx % 2 === 0) ? 1 : -1;
+                        
+                        if (options.smartChain && rawCoords.length > 0 && idx > 0) {
+                            let lastP = rawCoords[rawCoords.length - 1];
+                            let dx = (center.lon - lastP.lon) * Math.cos(center.lat * Math.PI / 180);
+                            let dy = center.lat - lastP.lat;
+                            startAngleOffset = Math.atan2(-dx, -dy) * (180 / Math.PI);
+                        } else if (passNum === 2 && options.interleave) {
+                            startAngleOffset += (360 / options.pointsCount / 2);
+                        }
+
+                        let currentClusterPoints = generateCirclePoints(
+                            center.lat, center.lon, options.radius, options.pointsCount, ratio, startAngleOffset, options.crossCenter, direction
+                        ).map(p => ({ 
+                            ...p, 
+                            pass: passNum,
+                            isClusterContinuation: (idx > 0)
+                        }));
+
+                        if (rawCoords.length > 0 && idx === 0) {
+                            currentClusterPoints[0].forceJump = true;
+                        }
+
+                        rawCoords = rawCoords.concat(currentClusterPoints);
+
+                        if (options.enableLoopBuffer && options.loopBuffer > 0 && currentClusterPoints.length > 0) {
+                            let lastP = currentClusterPoints[currentClusterPoints.length - 1];
+                            for(let b=0; b < options.loopBuffer; b++) {
+                                rawCoords.push({ 
+                                    lat: lastP.lat + 0.000001*(b+1), 
+                                    lon: lastP.lon + 0.000001*(b+1), 
+                                    type: 'loop_buffer',
+                                    pass: passNum,
+                                    isClusterContinuation: (idx > 0)
+                                });
+                            }
+                        }
+                    });
+                });
+            };
+
+            runPass(options.loop1Ratio, 1);
+
+            if (options.loopMode === 'twice') {
+                runPass(options.loop2Ratio, 2);
+            }
+
+            return rawCoords;
+        }
+
+        async function processAll() {
+            if (plantAnimTimer) { clearInterval(plantAnimTimer); plantAnimTimer = null; }
+            if (plantAnimMarker) { mapPlant.removeLayer(plantAnimMarker); plantAnimMarker = null; }
+            plantAnimIndex = 0;
+            document.getElementById('plantAnimControls').style.display = 'flex';
+            document.getElementById('btn-play-plant').innerHTML = '<i data-lucide="play"></i> 模擬';
+            lucide.createIcons();
+
+            const inputText = document.getElementById('inputCoords').value;
+            let originalCenters = extractCoordinates(inputText);
+
+            if (originalCenters.length === 0) return alert('找不到有效的座標！');
+            hideEmptyState('gen');
+            fetchLocationName(originalCenters[0].lat, originalCenters[0].lon, originalCenters.length + '花點', 'gpxLocationName');
+
+            const sortMode = document.querySelector('input[name="pathSort"]:checked').value;
+            const endMode = document.querySelector('input[name="pathEnd"]:checked').value;
+            
+            const loopMode = document.querySelector('input[name="loopStrategy"]:checked').value;
+            const loop1Ratio = parseFloat(document.getElementById('loop1Ratio').value) || 1.1;
+            const loop2Ratio = loopMode === 'twice' ? (parseFloat(document.getElementById('loop2Ratio').value) || 1.0) : 0;
+            const interleave = document.getElementById('interleaveLoop').checked;
+            const crossCenter = document.getElementById('crossCenter').checked; 
+            const smartChain = document.getElementById('smartChain').checked;
+            const radius = parseFloat(document.getElementById('circleRadius').value) || 30;
+            const pointsCount = parseInt(document.getElementById('circlePoints').value) || 8;
+            const maxDist = parseFloat(document.getElementById('maxDistance').value) || 6;
+            const jumpThreshold = parseFloat(document.getElementById('jumpThreshold').value) || 150;
+            const jumpBuffer = parseInt(document.getElementById('jumpBuffer').value) || 3;
+            const isDynamicBuffer = document.getElementById('dynamicBuffer').checked;
+            const maxJumpBuffer = parseInt(document.getElementById('maxJumpBuffer').value) || 15;
+            const loopBuffer = parseInt(document.getElementById('loopBuffer').value) || 1;
+            const enableLoopBuffer = document.getElementById('enableLoopBuffer').checked;
+
+            const harvestStratElement = document.querySelector('input[name="harvestStrategy"]:checked');
+            const harvestStrat = harvestStratElement ? harvestStratElement.value : 'jump_offset';
+            const rawOffsetMin = parseFloat(document.getElementById('harvestOffsetMin').value) || 60;
+            const rawOffsetMax = parseFloat(document.getElementById('harvestOffsetMax').value) || 75;
+            const hOffsetMin = Math.min(rawOffsetMin, rawOffsetMax);
+            const hOffsetMax = Math.max(rawOffsetMin, rawOffsetMax);
+            const hWait1 = parseInt(document.getElementById('harvestWait1').value) || 2;
+            const hWait2 = parseInt(document.getElementById('harvestWait2').value) || 2;
+            const hWalkDist = parseFloat(document.getElementById('harvestWalkDist').value) || 10;
+            const hWalkPts = parseInt(document.getElementById('harvestWalkPoints').value) || 3;
+
+            if (maxDist >= jumpThreshold) return alert('加密間距必須小於跳躍緩衝距離！');
+
+            let sumLat = 0, sumLon = 0;
+            originalCenters.forEach(c => { sumLat += c.lat; sumLon += c.lon; });
+            const centerAvgLat = sumLat / originalCenters.length;
+            const centerAvgLon = sumLon / originalCenters.length;
+
+            let sortedCenters = sortMode === 'auto' ? sortShortestPath([...originalCenters]) : [...originalCenters];
+
+            // ==========================================
+            // 🌸 生成種花路徑 (Plant)
+            // ==========================================
+            let rawPlantCoords = buildRouteFromCenters(sortedCenters, {
+                radius, pointsCount, loopMode, loop1Ratio, loop2Ratio, crossCenter, interleave, smartChain,
+                mergeOverlaps: true, sortMode: 'original', loopBuffer, enableLoopBuffer
+            });
+
+            let returnPass = loopMode === 'twice' ? 2 : 1;
+            if (endMode === 'first') {
+                rawPlantCoords.push({ ...sortedCenters[0], type: 'loop', forceJump: true, pass: returnPass });
+            } else if (endMode === 'center') {
+                rawPlantCoords.push({ lat: centerAvgLat, lon: centerAvgLon, type: 'loop', forceJump: true, pass: returnPass });
+            }
+
+            let finalPlantCoords = [];
+            let plantJumpSegments = [];
+
+            for (let i = 0; i < rawPlantCoords.length - 1; i++) {
+                const c1 = rawPlantCoords[i];
+                const c2 = rawPlantCoords[i + 1];
+                const dist = getDistance(c1.lat, c1.lon, c2.lat, c2.lon);
+
+                finalPlantCoords.push(c1);
+                
+                if (dist >= jumpThreshold || c2.forceJump) {
+                    plantJumpSegments.push([c1, c2]);
+                    let actualBuffer = jumpBuffer;
+                    if (isDynamicBuffer) {
+                        let multiplier = Math.sqrt(dist / jumpThreshold);
+                        actualBuffer = Math.round(jumpBuffer * multiplier);
+                        actualBuffer = Math.max(jumpBuffer, actualBuffer);
+                        actualBuffer = Math.min(actualBuffer, maxJumpBuffer);
+                    }
+                    for (let b = 0; b < actualBuffer; b++) {
+                        finalPlantCoords.push({ lat: c2.lat + 0.000001 * (b + 1), lon: c2.lon + 0.000001 * (b + 1), type: 'jump_buffer', pass: c2.pass});
+                    }
+                } 
+                else if (dist > maxDist) {
+                    const steps = Math.ceil(dist / maxDist);
+                    for (let j = 1; j < steps; j++) {
+                        finalPlantCoords.push({
+                            lat: c1.lat + (c2.lat - c1.lat) * (j / steps), lon: c1.lon + (c2.lon - c1.lon) * (j / steps),
+                            type: c2.isClusterContinuation ? 'loop' : 'walk', pass: c2.pass
+                        });
+                    }
+                }
+            }
+            finalPlantCoords.push(rawPlantCoords[rawPlantCoords.length - 1]);
+
+
+            // ==========================================
+            // 🍎 生成收果路徑 (Harvest) - 加入圓弧與全域防禦
+            // ==========================================
+            let harvestCenters = [];
+            const R = 6371000;
+
+            if (harvestStrat === 'jump_offset') {
+                harvestCenters = sortedCenters.map((c, index) => {
+                    let safePoint = null;
+                    let currentMaxOffset = hOffsetMax;
+                    let attempts = 0;
+                    let finalAngle = 0;
+                    let finalDist = 0;
+
+                    // ⭐ 全域安全防禦迴圈
+                    while (!safePoint && attempts < 200) {
+                        const angle = Math.random() * 360 * (Math.PI / 180); 
+                        const dist = hOffsetMin + Math.random() * (currentMaxOffset - hOffsetMin);
+                        
+                        const dLat = (dist * Math.cos(angle)) / R;
+                        const dLon = (dist * Math.sin(angle)) / (R * Math.cos(c.lat * Math.PI / 180));
+                        
+                        const testLat = c.lat + (dLat * 180 / Math.PI);
+                        const testLon = c.lon + (dLon * 180 / Math.PI);
+
+                        let isSafe = true;
+                        for (let i = 0; i < sortedCenters.length; i++) {
+                            let d = getDistance(testLat, testLon, sortedCenters[i].lat, sortedCenters[i].lon);
+                            if (d <= 41) {
+                                isSafe = false;
+                                break;
+                            }
+                        }
+
+                        if (isSafe) {
+                            safePoint = { lat: testLat, lon: testLon };
+                            finalAngle = angle * (180 / Math.PI); 
+                            finalDist = dist;
+                        } else {
+                            attempts++;
+                            if (attempts % 20 === 0) {
+                                currentMaxOffset += 10;
+                            }
+                        }
+                    }
+
+                    if (!safePoint) {
+                        finalDist = currentMaxOffset;
+                        finalAngle = 0;
+                        const fallbackDlat = (finalDist * Math.cos(0)) / R;
+                        safePoint = { lat: c.lat + (fallbackDlat * 180 / Math.PI), lon: c.lon };
+                    }
+                    
+                    return { ...safePoint, originalCenter: c, startAngle: finalAngle, radius: finalDist };
+                });
+            } else {
+                harvestCenters = sortedCenters.map(c => ({...c, originalCenter: c}));
+            }
+
+            let finalHarvestCoords = [];
+            let harvestJumpSegments = [];
+
+            if (harvestStrat === 'pure') {
+                let tempHC = [...harvestCenters];
+                if (endMode === 'first') { tempHC.push(tempHC[0]); } 
+                else if (endMode === 'center') { tempHC.push({ lat: centerAvgLat, lon: centerAvgLon }); }
+                
+                finalHarvestCoords = tempHC.map(c => ({...c, type: 'walk', pass: 1}));
+                for(let i=0; i<finalHarvestCoords.length-1; i++){
+                    harvestJumpSegments.push([finalHarvestCoords[i], finalHarvestCoords[i+1]]);
+                }
+            } else {
+                let tempHC = [...harvestCenters];
+                if (endMode === 'first') { tempHC.push(tempHC[0]); } 
+                else if (endMode === 'center') { tempHC.push({ lat: centerAvgLat, lon: centerAvgLon }); }
+
+                for (let i = 0; i < tempHC.length; i++) {
+                    let hc = tempHC[i];
+                    
+                    if (i > 0) {
+                        harvestJumpSegments.push([finalHarvestCoords[finalHarvestCoords.length - 1], hc]);
+                    }
+
+                    for (let w = 0; w < hWait1; w++) {
+                        finalHarvestCoords.push({ lat: hc.lat + 0.000001*w, lon: hc.lon + 0.000001*w, type: 'jump_buffer', pass: 1 });
+                    }
+
+                    if (harvestStrat === 'jump_offset' && hc.originalCenter) {
+                        let c = hc.originalCenter;
+                        let radius = hc.radius;
+                        let startAngle = hc.startAngle;
+                        let direction = Math.random() < 0.5 ? 1 : -1;
+                        let angleStep = (hWalkDist / radius) * (180 / Math.PI) / hWalkPts * direction;
+
+                        for (let p = 1; p <= hWalkPts; p++) {
+                            let currentAngle = startAngle + p * angleStep;
+                            let rad = currentAngle * Math.PI / 180;
+                            let dLat = (radius * Math.cos(rad)) / R;
+                            let dLon = (radius * Math.sin(rad)) / (R * Math.cos(c.lat * Math.PI / 180));
+                            
+                            let testLat = c.lat + (dLat * 180 / Math.PI);
+                            let testLon = c.lon + (dLon * 180 / Math.PI);
+
+                            let isSafe = true;
+                            for (let k = 0; k < sortedCenters.length; k++) {
+                                if (getDistance(testLat, testLon, sortedCenters[k].lat, sortedCenters[k].lon) <= 41) {
+                                    isSafe = false;
+                                    break;
+                                }
+                            }
+
+                            if (isSafe) {
+                                finalHarvestCoords.push({ lat: testLat, lon: testLon, type: 'walk', pass: 1 });
+                            }
+                        }
+                    } else {
+                        let angle = Math.random() * 360 * (Math.PI / 180);
+                        let dLat = (hWalkDist * Math.cos(angle)) / R;
+                        let dLon = (hWalkDist * Math.sin(angle)) / (R * Math.cos(hc.lat * Math.PI / 180));
+                        let eLat = hc.lat + (dLat * 180 / Math.PI);
+                        let eLon = hc.lon + (dLon * 180 / Math.PI);
+
+                        for (let p = 1; p <= hWalkPts; p++) {
+                            let r = p / hWalkPts;
+                            finalHarvestCoords.push({ lat: hc.lat + (eLat - hc.lat) * r, lon: hc.lon + (eLon - hc.lon) * r, type: 'walk', pass: 1 });
+                        }
+                    }
+
+                    let endC = finalHarvestCoords[finalHarvestCoords.length - 1];
+                    for (let w = 0; w < hWait2; w++) {
+                        finalHarvestCoords.push({ lat: endC.lat + 0.000001*(w+1), lon: endC.lon + 0.000001*(w+1), type: 'loop_buffer', pass: 1 });
+                    }
+                }
+            }
+
+            // ==========================================
+            // 💾 狀態更新與 UI 渲染
+            // ==========================================
+            genState = {
+                originalCenters,
+                finalPlantCoords,
+                jumpSegments: plantJumpSegments,
+                harvestCenters,
+                finalHarvestCoords,
+                harvestJumpSegments
+            };
+
+            document.getElementById('layerToggles').style.display = (loopMode === 'twice') ? 'flex' : 'none';
+
+            if(document.getElementById('gpxLocationName').value.includes('偵測中')) {
+                await new Promise(r => setTimeout(r, 800));
+            }
+
+            document.getElementById('outputPlantGPX').value = coordsToGPX(finalPlantCoords, generateFileName('花', 'gpxLocationName'));
+            document.getElementById('outputHarvestGPX').value = coordsToGPX(finalHarvestCoords, generateFileName('果', 'gpxLocationName'));
+
+            const plantDistKm = (calcPathDistance(finalPlantCoords, jumpThreshold) / 1000).toFixed(2);
+            
+            // ⭐ 演算法修正：1點 = 1秒
+            const plantTimeMin = Math.floor(finalPlantCoords.length / 60);
+            const plantTimeSec = finalPlantCoords.length % 60;
+            
+            const harvestTimeMin = Math.floor(finalHarvestCoords.length / 60);
+            const harvestTimeSec = finalHarvestCoords.length % 60;
+
+            document.getElementById('statsDashboard').style.display = 'flex';
+            document.getElementById('dash-points').innerText = `${originalCenters.length} 點`;
+            document.getElementById('dash-dist').innerText = `${plantDistKm} km`;
+            document.getElementById('dash-center').innerText = `${centerAvgLat.toFixed(6)}, ${centerAvgLon.toFixed(6)}`;
+            document.getElementById('dash-start').innerText = `${originalCenters[0].lat.toFixed(6)}, ${originalCenters[0].lon.toFixed(6)}`;
+            
+            document.getElementById('dash-time-plant').innerText = `約 ${plantTimeMin} 分 ${plantTimeSec} 秒`;
+            document.getElementById('dash-time-harvest').innerText = `約 ${harvestTimeMin} 分 ${harvestTimeSec} 秒`;
+            
+            reRenderGeneratorMaps();
+        }
+
+        function reRenderGeneratorMaps() {
+            if (!genState) return;
+
+            let showPass1 = document.getElementById('showPass1') ? document.getElementById('showPass1').checked : true;
+            let showPass2 = document.getElementById('showPass2') ? document.getElementById('showPass2').checked : true;
+
+            let filteredPlantCoords = genState.finalPlantCoords.filter(c => {
+                if (c.pass === 1 && !showPass1) return false;
+                if (c.pass === 2 && !showPass2) return false;
+                return true;
+            });
+
+            let filteredJumpSegments = genState.jumpSegments.filter(seg => {
+                let p2 = seg[1];
+                if (p2.pass === 1 && !showPass1) return false;
+                if (p2.pass === 2 && !showPass2) return false;
+                return true;
+            });
+
+            globalPlantCoords = filteredPlantCoords; 
+            drawGeneratorMaps(genState.originalCenters, filteredPlantCoords, filteredJumpSegments, genState.finalHarvestCoords, genState.harvestJumpSegments, genState.harvestCenters);
+        }
+
+        function drawGeneratorMaps(originalCenters, finalPlantCoords, plantJumpSegments, finalHarvestCoords, harvestJumpSegments, harvestCenters) {
+            layersPlant.forEach(layer => mapPlant.removeLayer(layer));
+            layersPlant = [];
+            layersHarvest.forEach(layer => mapHarvest.removeLayer(layer));
+            layersHarvest = [];
+
+            // --- 繪製種花地圖 ---
+            plantJumpSegments.forEach(seg => {
+                layersPlant.push(L.polyline([[seg[0].lat, seg[0].lon], [seg[1].lat, seg[1].lon]], {color: '#cbd5e1', weight: 2, dashArray: '4, 6', opacity: 0.8}).addTo(mapPlant));
+            });
+
+            finalPlantCoords.forEach(c => {
+                let ptColor = '#ef4444'; let ptRadius = 2; let opacity = 0.8;
+                if (c.type === 'jump_buffer') { ptColor = '#8b5cf6'; ptRadius = 4; opacity = 0.9; } 
+                else if (c.type === 'loop_buffer') { ptColor = '#3b82f6'; ptRadius = 4; opacity = 0.9; } 
+                else if (c.type === 'walk') { ptColor = '#f59e0b'; ptRadius = 1.5; opacity = 0.6; }
+                layersPlant.push(L.circleMarker([c.lat, c.lon], {radius: ptRadius, color: ptColor, fillOpacity: opacity, weight: 1}).addTo(mapPlant));
+            });
+
+            originalCenters.forEach((c, index) => {
+                layersPlant.push(L.circle([c.lat, c.lon], {
+                    radius: 40, color: '#64748b', weight: 1.5, dashArray: '5, 5', fillColor: '#94a3b8', fillOpacity: 0.15, interactive: false
+                }).addTo(mapPlant));
+
+                const marker = L.circleMarker([c.lat, c.lon], {radius: 6, color: '#0f172a', fillColor: 'white', fillOpacity: 0.9, weight: 2}).addTo(mapPlant);
+                marker.bindTooltip((index + 1).toString(), {permanent: true, direction: 'center', className: 'node-label'});
+                marker.bindPopup(`<div style="font-weight:600; color:var(--text-main); margin-bottom:4px; font-size:14px;">原始中心 P${index + 1}</div><div style="font-family:ui-monospace, monospace; color:var(--text-muted); font-size:12px;">${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}</div>`);
+                layersPlant.push(marker);
+            });
+
+            if (originalCenters.length > 0) {
+                mapPlant.fitBounds(L.latLngBounds(originalCenters.map(c => [c.lat, c.lon])), {padding: [30, 30]});
+            }
+
+            // --- 繪製收果地圖 ---
+            harvestJumpSegments.forEach(seg => {
+                layersHarvest.push(L.polyline([[seg[0].lat, seg[0].lon], [seg[1].lat, seg[1].lon]], {color: '#cbd5e1', weight: 2, dashArray: '4, 6', opacity: 0.8}).addTo(mapHarvest));
+            });
+
+            finalHarvestCoords.forEach(c => {
+                let ptColor = '#ef4444'; let ptRadius = 2; let opacity = 0.8;
+                if (c.type === 'jump_buffer') { ptColor = '#8b5cf6'; ptRadius = 4; opacity = 0.9; } 
+                else if (c.type === 'loop_buffer') { ptColor = '#3b82f6'; ptRadius = 4; opacity = 0.9; } 
+                else if (c.type === 'walk') { ptColor = '#f59e0b'; ptRadius = 1.5; opacity = 0.6; }
+                layersHarvest.push(L.circleMarker([c.lat, c.lon], {radius: ptRadius, color: ptColor, fillOpacity: opacity, weight: 1}).addTo(mapHarvest));
+            });
+
+            harvestCenters.forEach((c, index) => {
+                const marker = L.circleMarker([c.lat, c.lon], {radius: 6, color: '#ef4444', fillColor: '#fef2f2', fillOpacity: 0.9, weight: 2}).addTo(mapHarvest);
+                marker.bindTooltip((index + 1).toString(), {permanent: true, direction: 'center', className: 'node-label', style: {color: '#991b1b'}});
+                marker.bindPopup(`<div style="font-weight:600; color:#991b1b; margin-bottom:4px; font-size:14px;">收果目標 P${index + 1}</div><div style="font-family:ui-monospace, monospace; color:var(--text-muted); font-size:12px;">${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}</div>`);
+                layersHarvest.push(marker);
+            });
+            
+            originalCenters.forEach((c, index) => {
+                layersHarvest.push(L.circle([c.lat, c.lon], {
+                    radius: 40, color: '#64748b', weight: 1.5, dashArray: '5, 5', fillColor: '#94a3b8', fillOpacity: 0.15, interactive: false
+                }).addTo(mapHarvest));
+
+                layersHarvest.push(L.circleMarker([c.lat, c.lon], {radius: 4, color: '#94a3b8', fillColor: 'white', fillOpacity: 0.5, weight: 1}).addTo(mapHarvest));
+            });
+
+            if (harvestCenters.length > 0) {
+                mapHarvest.fitBounds(L.latLngBounds(harvestCenters.map(c => [c.lat, c.lon])), {padding: [30, 30]});
+            }
+            
+            setTimeout(() => { mapPlant.invalidateSize(); mapHarvest.invalidateSize(); }, 100);
+        }
+
+        function saveViewerState() {
+            viewerHistory.push(JSON.parse(JSON.stringify(currentViewerCoords)));
+            if (viewerHistory.length > 30) viewerHistory.shift(); 
+        }
+
+        function undoViewerState() {
+            if (viewerHistory.length > 0) {
+                currentViewerCoords = viewerHistory.pop();
+                selectedViewerIndices.clear();
+                renderViewerData();
+            } else {
+                alert("目前沒有可以復原的動作喔！");
+            }
+        }
+
+        function previewCoordinates() {
+            const inputText = document.getElementById('viewerInput').value;
+            originalViewerCoords = extractCoordinates(inputText);
+            if (originalViewerCoords.length === 0) return alert('找不到有效的座標！');
+            
+            hideEmptyState('view');
+            
+            currentViewerCoords = [...originalViewerCoords]; 
+            viewerHistory = []; 
+            selectedViewerIndices.clear();
+            
+            document.getElementById('viewerTools').style.display = 'block';
+            document.getElementById('viewerEditorTools').style.display = 'flex';
+            
+            renderViewerData(true); 
+        }
+
+        function autoPlanViewer() {
+            if (currentViewerCoords.length <= 1) return;
+            saveViewerState();
+            currentViewerCoords = sortShortestPath(currentViewerCoords);
+            selectedViewerIndices.clear();
+            renderViewerData();
+        }
+
+        function resetViewer() {
+            if (originalViewerCoords.length === 0) return;
+            saveViewerState();
+            currentViewerCoords = JSON.parse(JSON.stringify(originalViewerCoords));
+            selectedViewerIndices.clear();
+            renderViewerData();
+        }
+
+        function setMapMode(mode) {
+            viewerMapMode = mode;
+            if (mode === 'add') {
+                mapViewer._container.style.cursor = 'crosshair';
+                selectedViewerIndices.clear();
+                renderViewerData();
+            } else {
+                mapViewer._container.style.cursor = '';
+            }
+        }
+
+        function toggleSelectionViewer(index, e) {
+            if (e) L.DomEvent.stopPropagation(e);
+            if (viewerMapMode !== 'select') return;
+            
+            if (selectedViewerIndices.has(index)) {
+                selectedViewerIndices.delete(index);
+            } else {
+                selectedViewerIndices.add(index);
+            }
+            renderViewerData();
+        }
+
+        function selectAllViewer() {
+            currentViewerCoords.forEach((_, i) => selectedViewerIndices.add(i));
+            renderViewerData();
+        }
+
+        function clearSelectionViewer() {
+            selectedViewerIndices.clear();
+            renderViewerData();
+        }
+
+        function deleteSelectedViewer() {
+            if (selectedViewerIndices.size === 0) return alert('請先點選要刪除的座標點！');
+            saveViewerState();
+            currentViewerCoords = currentViewerCoords.filter((_, i) => !selectedViewerIndices.has(i));
+            selectedViewerIndices.clear();
+            renderViewerData();
+        }
+
+        function swapSelectedViewer() {
+            if (selectedViewerIndices.size !== 2) {
+                return alert('請選取剛好「兩個」座標點進行互換！');
+            }
+            
+            saveViewerState();
+            const [idx1, idx2] = Array.from(selectedViewerIndices);
+            
+            const temp = currentViewerCoords[idx1];
+            currentViewerCoords[idx1] = currentViewerCoords[idx2];
+            currentViewerCoords[idx2] = temp;
+            
+            selectedViewerIndices.clear();
+            renderViewerData();
+        }
+
+        function addManualCoordViewer() {
+            const val = document.getElementById('manualCoordAdd').value;
+            const coords = extractCoordinates(val);
+            if (coords.length > 0) {
+                saveViewerState();
+                currentViewerCoords.push(...coords);
+                document.getElementById('manualCoordAdd').value = '';
+                renderViewerData();
+            } else {
+                alert("格式錯誤，找不到有效座標 (格式範例：20.12, 85.12)");
+            }
+        }
+
+        function renderViewerData(fitBounds = false) {
+            layersViewer.forEach(layer => mapViewer.removeLayer(layer));
+            layersViewer = [];
+
+            const latlngs = currentViewerCoords.map(c => [c.lat, c.lon]);
+            if (latlngs.length > 1) {
+                layersViewer.push(L.polyline(latlngs, {color: '#94a3b8', weight: 2, opacity: 0.8, dashArray: '4, 4'}).addTo(mapViewer));
+            }
+
+            currentViewerCoords.forEach((c, index) => {
+                const isSelected = selectedViewerIndices.has(index);
+                const customIcon = L.divIcon({
+                    className: `custom-marker ${isSelected ? 'selected' : ''}`,
+                    html: `${index + 1}`,
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                });
+
+                const marker = L.marker([c.lat, c.lon], { 
+                    icon: customIcon, 
+                    draggable: viewerMapMode === 'select' 
+                }).addTo(mapViewer);
+                
+                marker.on('click', (e) => toggleSelectionViewer(index, e));
+                
+                marker.on('dragstart', function() {
+                    saveViewerState();
+                });
+
+                marker.on('dragend', function(e) {
+                    const pos = e.target.getLatLng();
+                    currentViewerCoords[index] = { lat: pos.lat, lon: pos.lng };
+                    renderViewerData();
+                });
+
+                layersViewer.push(marker);
+            });
+
+            if (fitBounds && latlngs.length > 0) {
+                mapViewer.fitBounds(L.latLngBounds(latlngs), {padding: [50, 50]});
+            }
+
+            const listContainer = document.getElementById('sortableList');
+            listContainer.innerHTML = '';
+            
+            currentViewerCoords.forEach((c, index) => {
+                const li = document.createElement('div');
+                const isSelected = selectedViewerIndices.has(index);
+                li.className = `draggable-item ${isSelected ? 'selected-item' : ''}`;
+                li.draggable = true;
+                li.dataset.index = index;
+                li.innerHTML = `<span class="drag-handle"><i data-lucide="grip-vertical"></i></span> <span class="point-num">P${index + 1}</span> <span class="coord-text">${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}</span>`;
+                
+                li.onclick = (e) => toggleSelectionViewer(index, e);
+                li.addEventListener('dragstart', handleDragStart);
+                li.addEventListener('dragover', handleDragOver);
+                li.addEventListener('drop', handleDrop);
+                li.addEventListener('dragenter', handleDragEnter);
+                li.addEventListener('dragleave', handleDragLeave);
+                listContainer.appendChild(li);
+            });
+            
+            lucide.createIcons();
+            document.getElementById('viewerStats').innerHTML = `共有 <b>${currentViewerCoords.length}</b> 個座標點位 (已選取 ${selectedViewerIndices.size} 個)。`;
+        }
+
+        let dragStartIndex = -1;
+        function handleDragStart(e) { 
+            dragStartIndex = +this.dataset.index; 
+            e.dataTransfer.effectAllowed = 'move'; 
+            this.classList.add('dragging'); 
+            e.stopPropagation(); 
+        }
+        function handleDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; return false; }
+        function handleDragEnter(e) { e.preventDefault(); this.classList.add('over'); }
+        function handleDragLeave(e) { this.classList.remove('over'); }
+        function handleDrop(e) {
+            e.stopPropagation();
+            this.classList.remove('over');
+            const dragEndIndex = +this.dataset.index;
+            if (dragStartIndex !== dragEndIndex && dragStartIndex !== -1) {
+                saveViewerState();
+                const movedItem = currentViewerCoords.splice(dragStartIndex, 1)[0];
+                currentViewerCoords.splice(dragEndIndex, 0, movedItem);
+                
+                selectedViewerIndices.clear();
+                renderViewerData();
+            }
+            dragStartIndex = -1;
+            return false;
+        }
+
+        function copyViewerCoords() {
+            if (currentViewerCoords.length === 0) return alert('目前沒有座標可以複製！');
+            const lines = currentViewerCoords.map(c => `${c.lat.toFixed(7)},${c.lon.toFixed(7)}`).join('\n');
+            navigator.clipboard.writeText(lines).then(() => {
+                alert('✅ 編輯後的新座標已成功複製！');
+            });
+        }
+
+        window.onload = initMap;
+    </script>
+</body>
+</html>
