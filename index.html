@@ -571,11 +571,11 @@
                                 <div style="display: flex; gap: 15px; margin-bottom: 12px; flex-wrap: wrap;">
                                     <div style="flex: 1; min-width: 100px;">
                                         <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">跳躍後緩衝 (秒)</label>
-                                        <input type="number" id="harvestWait1" value="2" min="0" style="width: 100%; padding: 6px;">
+                                        <input type="number" id="harvestWait1" value="3" min="0" style="width: 100%; padding: 6px;">
                                     </div>
                                     <div style="flex: 1; min-width: 100px;">
                                         <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">步行後停留 (秒)</label>
-                                        <input type="number" id="harvestWait2" value="2" min="0" style="width: 100%; padding: 6px;">
+                                        <input type="number" id="harvestWait2" value="3" min="0" style="width: 100%; padding: 6px;">
                                     </div>
                                 </div>
 
@@ -585,7 +585,7 @@
                                 <div style="display: flex; gap: 15px; flex-wrap: wrap;">
                                     <div style="flex: 1; min-width: 100px;">
                                         <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">步行距離 (m)</label>
-                                        <input type="number" id="harvestWalkDist" value="20" min="1" style="width: 100%; padding: 6px;">
+                                        <input type="number" id="harvestWalkDist" value="30" min="1" style="width: 100%; padding: 6px;">
                                     </div>
                                     <div style="flex: 1; min-width: 100px;">
                                         <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">插入點位數</label>
@@ -1281,9 +1281,11 @@
             const rawOffsetMax = parseFloat(document.getElementById('harvestOffsetMax').value) || 60;
             const hOffsetMin = Math.min(rawOffsetMin, rawOffsetMax);
             const hOffsetMax = Math.max(rawOffsetMin, rawOffsetMax);
-            const hWait1 = parseInt(document.getElementById('harvestWait1').value) || 2;
-            const hWait2 = parseInt(document.getElementById('harvestWait2').value) || 2;
-            const hWalkDist = parseFloat(document.getElementById('harvestWalkDist').value) || 20;
+
+            const hWait1 = parseInt(document.getElementById('harvestWait1').value) || 3;
+            const hWait2 = parseInt(document.getElementById('harvestWait2').value) || 3;
+            const hWalkDist = parseFloat(document.getElementById('harvestWalkDist').value) || 30;
+
             const hWalkPts = parseInt(document.getElementById('harvestWalkPoints').value) || 3;
 
             if (maxDist >= jumpThreshold) return alert('加密間距必須小於跳躍緩衝距離！');
